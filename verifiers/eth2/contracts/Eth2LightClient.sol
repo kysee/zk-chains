@@ -2,12 +2,12 @@
 pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
-import "./ScUpdateVerifier.sol";
+import "./Eth2ScUpdateVerifier.sol";
 
-contract LightClient {
+contract Eth2LightClient {
     uint256 public lastPeriod;
     mapping(uint256 => bytes32) public scPubkeysHashes;
-    ScUpdateVerifier public verifier;
+    Eth2ScUpdateVerifier public verifier;
 
     // Beacon chain constants
     uint256 constant SLOTS_PER_EPOCH = 32;
@@ -16,7 +16,7 @@ contract LightClient {
     constructor(uint256 _initialPeriod, bytes32 _initialScPubkeysHash, address _verifierAddress) {
         lastPeriod = _initialPeriod;
         scPubkeysHashes[lastPeriod] = _initialScPubkeysHash;
-        verifier = ScUpdateVerifier(_verifierAddress);
+        verifier = Eth2ScUpdateVerifier(_verifierAddress);
     }
 
     function updateSyncCommittee (

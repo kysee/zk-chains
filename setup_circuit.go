@@ -33,15 +33,15 @@ func main() {
 func SetupCircuit() (constraint.ConstraintSystem, groth16.ProvingKey, groth16.VerifyingKey, error) {
 	logger.Disable()
 
-	ccsPath := filepath.Join(rootDir, ".build/ScUpdateVerifierCircuit.ccs")
-	pkPath := filepath.Join(rootDir, ".build/ScUpdateVerifierCircuit.pk")
-	vkPath := filepath.Join(rootDir, ".build/ScUpdateVerifierCircuit.vk")
+	ccsPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.ccs")
+	pkPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.pk")
+	vkPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.vk")
 
 	//
 	// Step 1: Compile circuit and save to file
-	println("🕧 Compile ScUpdateVerifierCircuit circuit...")
+	println("🕧 Compile Eth2ScUpdateCircuit circuit...")
 	// Compile with BN254 scalar field (for emulated BLS12-381)
-	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit.ScUpdateVerifierCircuit{})
+	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit.Eth2ScUpdateCircuit{})
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -85,7 +85,7 @@ func SetupCircuit() (constraint.ConstraintSystem, groth16.ProvingKey, groth16.Ve
 }
 
 func CreateSolidity(vk groth16.VerifyingKey) error {
-	path := "verifiers/eth2/contracts/ScUpdateVerifier.sol"
+	path := "verifiers/eth2/contracts/Eth2ScUpdateVerifier.sol"
 
 	// Solidity verifier 생성
 	var buf bytes.Buffer

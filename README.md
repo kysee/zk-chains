@@ -2,7 +2,7 @@
 
 ### Prerequisites
 
-To compile and setup the `ScUpdateVerifierCircuit`,
+To compile and setup the `Eth2ScUpdateCircuit`,
 
 ```bash
 go run setup.go
@@ -12,7 +12,7 @@ To generate `data/proof-data.json`,
 
 ```bash
 cd circuit
-go test -run TestScUpdateVerifierCircuit$ -timeout 20m
+go test -run TestEth2ScUpdateCircuit$ -timeout 20m
 cd ..
 ```
 

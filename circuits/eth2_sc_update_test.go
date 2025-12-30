@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const rootDir = ".."
+var rootDir = mustGetRootDir()
 
 // Global variables for circuit compilation and setup (initialized once in init())
 var (
@@ -42,7 +42,7 @@ var (
 	gnarkLogger = zerolog.New(os.Stdout).Level(zerolog.DebugLevel).With().Timestamp().Logger()
 )
 
-func TestScUpdateVerifierCircuit_IsSolved(t *testing.T) {
+func TestEth2ScUpdateCircuit_IsSolved(t *testing.T) {
 	// Load sync committee
 	update1104File, err := os.ReadFile(filepath.Join(rootDir, "data/sc-update-1104.json"))
 	require.NoError(t, err, "Failed to read file")
@@ -86,7 +86,7 @@ func TestScUpdateVerifierCircuit_IsSolved(t *testing.T) {
 	}
 
 	// Create witness
-	witness := &ScUpdateVerifierCircuit{}
+	witness := &Eth2ScUpdateCircuit{}
 
 	// Assign BeaconBlockHeader fields
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
@@ -127,14 +127,14 @@ func TestScUpdateVerifierCircuit_IsSolved(t *testing.T) {
 
 	// Test the circuit using gnark test framework
 	assert := gnark_test.NewAssert(t)
-	err = gnark_test.IsSolved(&ScUpdateVerifierCircuit{}, witness, ecc.BN254.ScalarField())
+	err = gnark_test.IsSolved(&Eth2ScUpdateCircuit{}, witness, ecc.BN254.ScalarField())
 	assert.NoError(err, "Circuit constraints should be satisfied")
 	t.Logf("✓ Proof solving SUCCEEDED!")
 
-	//assert.CheckCircuit(&circuit.ScUpdateVerifierCircuit{}, gnark_test.WithCurves(ecc.BN254), gnark_test.WithValidAssignment(witness), gnark_test.WithBackends(backend.GROTH16))
+	//assert.CheckCircuit(&circuit.Eth2ScUpdateCircuit{}, gnark_test.WithCurves(ecc.BN254), gnark_test.WithValidAssignment(witness), gnark_test.WithBackends(backend.GROTH16))
 }
 
-func TestScUpdateVerifierCircuit(t *testing.T) {
+func TestEth2ScUpdateCircuit(t *testing.T) {
 	onceSetupCircuit()
 
 	// Load sync committee
@@ -180,7 +180,7 @@ func TestScUpdateVerifierCircuit(t *testing.T) {
 	}
 
 	// Create witness
-	witness := &ScUpdateVerifierCircuit{}
+	witness := &Eth2ScUpdateCircuit{}
 
 	// Assign BeaconBlockHeader fields
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
@@ -256,7 +256,7 @@ func TestScUpdateVerifierCircuit(t *testing.T) {
 	t.Logf("✓ Proof verification SUCCEEDED!")
 }
 
-func TestScUpdateVerifierCircuitInvalidSignature(t *testing.T) {
+func TestEth2ScUpdateCircuitInvalidSignature(t *testing.T) {
 	onceSetupCircuit()
 
 	// Load sync committee
@@ -301,7 +301,7 @@ func TestScUpdateVerifierCircuitInvalidSignature(t *testing.T) {
 	require.NoError(t, err, "Failed to set random Y")
 
 	// Create witness with invalid signature
-	witness := &ScUpdateVerifierCircuit{}
+	witness := &Eth2ScUpdateCircuit{}
 
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
 	witness.ProposerIndex = uint64(update.Data.AttestedHeader.Beacon.ProposerIndex)
@@ -361,7 +361,7 @@ func TestScUpdateVerifierCircuitInvalidSignature(t *testing.T) {
 	}
 }
 
-func TestScUpdateVerifierCircuitInvalidBlockRoot(t *testing.T) {
+func TestEth2ScUpdateCircuitInvalidBlockRoot(t *testing.T) {
 	onceSetupCircuit()
 
 	// Load sync committee
@@ -411,7 +411,7 @@ func TestScUpdateVerifierCircuitInvalidBlockRoot(t *testing.T) {
 	}
 
 	// Create witness with invalid block root
-	witness := &ScUpdateVerifierCircuit{}
+	witness := &Eth2ScUpdateCircuit{}
 
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
 	witness.ProposerIndex = uint64(update.Data.AttestedHeader.Beacon.ProposerIndex)
@@ -459,7 +459,7 @@ func TestScUpdateVerifierCircuitInvalidBlockRoot(t *testing.T) {
 }
 
 // Benchmark the circuit
-func BenchmarkScUpdateVerifierCircuit(b *testing.B) {
+func BenchmarkEth2ScUpdateCircuit(b *testing.B) {
 	onceSetupCircuit()
 
 	// Load test data
@@ -488,7 +488,7 @@ func BenchmarkScUpdateVerifierCircuit(b *testing.B) {
 	var signature bls12381.G2Affine
 	_, _ = signature.SetBytes(sigBytes)
 
-	witness := &ScUpdateVerifierCircuit{}
+	witness := &Eth2ScUpdateCircuit{}
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
 	witness.ProposerIndex = uint64(update.Data.AttestedHeader.Beacon.ProposerIndex)
 	for i := 0; i < 32; i++ {
@@ -561,25 +561,25 @@ func onceSetupCircuit() {
 	// Compile circuit
 	var err error
 
-	ccsPath := filepath.Join(rootDir, ".build/ScUpdateVerifierCircuit.ccs")
-	pkPath := filepath.Join(rootDir, ".build/ScUpdateVerifierCircuit.pk")
-	vkPath := filepath.Join(rootDir, ".build/ScUpdateVerifierCircuit.vk")
+	ccsPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.ccs")
+	pkPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.pk")
+	vkPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.vk")
 
 	// Step 1: Circuit compile
 	fCcs, err := os.Open(ccsPath)
 	defer fCcs.Close()
 
 	if err != nil {
-		fmt.Println("Compiling ScUpdateVerifierCircuit circuit...")
+		fmt.Println("Compiling Eth2ScUpdateCircuit circuit...")
 		// Compile with BN254 scalar field (for emulated BLS12-381)
-		blsVerifierCCS, err = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &ScUpdateVerifierCircuit{})
+		blsVerifierCCS, err = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &Eth2ScUpdateCircuit{})
 		if err != nil {
 			panic(err)
 		}
 		fCcs, _ = os.Create(ccsPath)
 		_, _ = blsVerifierCCS.WriteTo(fCcs)
 	} else {
-		fmt.Println("Loading ScUpdateVerifierCircuit circuit...")
+		fmt.Println("Loading Eth2ScUpdateCircuit circuit...")
 
 		blsVerifierCCS = groth16.NewCS(ecc.BN254)
 		_, err = blsVerifierCCS.ReadFrom(fCcs)
@@ -624,7 +624,7 @@ func onceSetupCircuit() {
 // next_sync_committee_branch to the witness
 func assignNextSyncCommitteeToWitness(
 	update *types.LightClientUpdate,
-	witness *ScUpdateVerifierCircuit,
+	witness *Eth2ScUpdateCircuit,
 ) {
 	// Compute next_sync_committee root
 	nextSCRoot := update.Data.NextSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
@@ -640,5 +640,49 @@ func assignNextSyncCommitteeToWitness(
 		for j := 0; j < 32; j++ {
 			witness.NextScBranch[i][j] = uints.NewU8(update.Data.NextSyncCommitteeBranch[i][j])
 		}
+	}
+}
+
+func mustGetRootDir() string {
+	root, err := projectRoot(".")
+	if err != nil {
+		panic(err)
+	}
+	return root
+}
+
+// projectRoot finds the project root directory by searching for go.mod file
+// starting from the given startPath (default: current directory)
+func projectRoot(startPath ...string) (string, error) {
+	start := "."
+	if len(startPath) > 0 {
+		start = startPath[0]
+	}
+
+	// Convert to absolute path
+	currentPath, err := filepath.Abs(start)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Walk up directory tree until we find go.mod
+	for {
+		// Check if go.mod exists in current directory
+		goModPath := filepath.Join(currentPath, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			fmt.Println("found project root dir:", currentPath)
+			return currentPath, nil
+		}
+
+		// Get parent directory
+		parentPath := filepath.Dir(currentPath)
+
+		// Check if we've reached the root
+		if parentPath == currentPath {
+			return "", fmt.Errorf("not found project root dir")
+		}
+
+		currentPath = parentPath
+		fmt.Println("next dir:", currentPath)
 	}
 }

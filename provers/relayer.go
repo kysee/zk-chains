@@ -161,11 +161,11 @@ func (r *Relayer) setupCircuit() error {
 		return nil
 	}
 
-	ccsPath := filepath.Join(r.config.RootDir, "../.build/ScUpdateVerifierCircuit.ccs")
-	pkPath := filepath.Join(r.config.RootDir, "../.build/ScUpdateVerifierCircuit.pk")
+	ccsPath := filepath.Join(r.config.RootDir, "../.build/Eth2ScUpdateCircuit.ccs")
+	pkPath := filepath.Join(r.config.RootDir, "../.build/Eth2ScUpdateCircuit.pk")
 
 	// Load compiled circuit
-	log.Println("Loading ScUpdateVerifierCircuit...")
+	log.Println("Loading Eth2ScUpdateCircuit...")
 	fCcs, err := os.Open(ccsPath)
 	if err != nil {
 		return fmt.Errorf("failed to open CCS file: %w", err)
@@ -214,7 +214,7 @@ func (r *Relayer) generateProof(update *types.LightClientUpdate) ([]byte, error)
 	}
 
 	// Create witness
-	witness := &circuit.ScUpdateVerifierCircuit{}
+	witness := &circuit.Eth2ScUpdateCircuit{}
 
 	// Assign BeaconBlockHeader fields
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
@@ -280,7 +280,7 @@ func (r *Relayer) generateProof(update *types.LightClientUpdate) ([]byte, error)
 // next_sync_committee_branch to the witness
 func assignNextSyncCommitteeToWitness(
 	update *types.LightClientUpdate,
-	witness *circuit.ScUpdateVerifierCircuit,
+	witness *circuit.Eth2ScUpdateCircuit,
 ) {
 	// Compute next_sync_committee root
 	nextSCRoot := update.Data.NextSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())

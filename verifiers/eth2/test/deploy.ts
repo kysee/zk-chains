@@ -27,42 +27,42 @@ async function deploy() {
 	// Load contract artifacts
 	const scUpdateVerifierArtifact = JSON.parse(
         fs.readFileSync(
-          path.join(__dirname, "../artifacts/contracts/ScUpdateVerifier.sol/ScUpdateVerifier.json"),
+          path.join(__dirname, "../artifacts/contracts/Eth2ScUpdateVerifier.sol/Eth2ScUpdateVerifier.json"),
           "utf8"
         )
 	);
 
 	const lightClientArtifact = JSON.parse(
         fs.readFileSync(
-          path.join(__dirname, "../artifacts/contracts/LightClient.sol/LightClient.json"),
+          path.join(__dirname, "../artifacts/contracts/Eth2LightClient.sol/Eth2LightClient.json"),
           "utf8"
 	    )
 	);
 
-	// Deploy ScUpdateVerifier
-	console.log("\n=== Deploying ScUpdateVerifier ===");
-	const ScUpdateVerifierFactory = new ethers.ContractFactory(
+	// Deploy Eth2ScUpdate
+	console.log("\n=== Deploying Eth2ScUpdate ===");
+	const Eth2ScUpdateFactory = new ethers.ContractFactory(
 	scUpdateVerifierArtifact.abi,
 	scUpdateVerifierArtifact.bytecode,
 	  managedWallet
 	);
-	const scUpdateVerifier = await ScUpdateVerifierFactory.deploy();
+	const scUpdateVerifier = await Eth2ScUpdateFactory.deploy();
 	await scUpdateVerifier.waitForDeployment();
 	const scUpdateVerifierAddress = await scUpdateVerifier.getAddress();
-	console.log("ScUpdateVerifier deployed to:", scUpdateVerifierAddress);
+	console.log("Eth2ScUpdate deployed to:", scUpdateVerifierAddress);
 
 
 
-	// Deploy LightClient
+	// Deploy Eth2LightClient.sol
 	const scUpdate0 = loadSyncCommitteeUpdateData(`${projectRoot()}/data/sc-update-1104.json`);
 	const initialPeriod = 1n + BigInt(scUpdate0.data.attested_header.beacon.slot) / 8192n;
 	//expected "0x8bd26c003d619dc6aa13e4c7b31d01910a87f43da84070e6cbdd4d45a91da3f3";
 	const initialScPubkeysHash = scPubKeysHash(scUpdate0.data.next_sync_committee);
 
-	console.log("\n=== Deploying LightClient ===");
+	console.log("\n=== Deploying Eth2LightClient.sol ===");
 	console.log("Initial period:", initialPeriod);
 	console.log("Initial scPubkeysHash:", initialScPubkeysHash);
-	console.log("ScUpdateVerifier address:", scUpdateVerifierAddress);
+	console.log("Eth2ScUpdate address:", scUpdateVerifierAddress);
 
 	const LightClientFactory = new ethers.ContractFactory(
 		lightClientArtifact.abi,
@@ -76,7 +76,7 @@ async function deploy() {
 	);
 	await lightClient0.waitForDeployment();
 	const lightClientAddress = await lightClient0.getAddress();
-	console.log("LightClient deployed to:", lightClientAddress);
+	console.log("Eth2LightClient.sol deployed to:", lightClientAddress);
 
     return [lightClientAddress, scUpdateVerifierAddress];
 }
@@ -84,13 +84,13 @@ async function deploy() {
 async function testLightClientUpdate(lightClientAddress: string) {
     const lightClientArtifact = JSON.parse(
         fs.readFileSync(
-            path.join(__dirname, "../artifacts/contracts/LightClient.sol/LightClient.json"),
+            path.join(__dirname, "../artifacts/contracts/Eth2LightClient.sol/Eth2LightClient.json"),
             "utf8"
         )
     );
     const lightClient = new ethers.Contract(lightClientAddress, lightClientArtifact.abi, managedWallet);
     // Verify deployment
-    console.log("\n=== Verifying LightClient Deployment ===");
+    console.log("\n=== Verifying Eth2LightClient.sol Deployment ===");
     const period = await lightClient.lastPeriod();
     const scPubkeysHash = await lightClient.scPubkeysHashes(period);
     const verifierAddress = await lightClient.verifier();

@@ -12,7 +12,7 @@ import (
 
 func main() {
 	// Read the verifying key from file (to ensure consistency with proving key)
-	vkFile, err := os.Open("../.build/ScUpdateVerifierCircuit.vk")
+	vkFile, err := os.Open("../.build/Eth2ScUpdateCircuit.vk")
 	if err != nil {
 		panic(err)
 	}
@@ -34,10 +34,10 @@ func main() {
 		panic(err)
 	}
 
-	err = os.WriteFile("contracts/ScUpdateVerifier.sol", buf.Bytes(), 0644)
+	err = os.WriteFile("contracts/Eth2ScUpdateVerifier.sol", buf.Bytes(), 0644)
 	if err != nil {
 		panic(err)
 	}
 
-	println("✅ Solidity verifier generated: contracts/ScUpdateVerifier.sol")
+	println("✅ Solidity verifier generated: contracts/Eth2ScUpdateVerifier.sol")
 }

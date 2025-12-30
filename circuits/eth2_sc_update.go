@@ -29,7 +29,7 @@ var DOMAIN = [32]uint8{
 	0x80, 0x7e, 0x37, 0x2b, 0x6b, 0x9c, 0xa5, 0x39,
 }
 
-// ScUpdateVerifierCircuit verifies Ethereum beacon chain sync committee BLS signatures
+// Eth2ScUpdateCircuit verifies Ethereum beacon chain sync committee BLS signatures
 //
 // This circuit performs the complete verification flow:
 // 1. Computes blockRoot from BeaconBlockHeader fields
@@ -43,7 +43,7 @@ var DOMAIN = [32]uint8{
 // NOTE: For complete verification of next_sync_committee, the following checks must be performed OUTSIDE the circuit:
 // - Slot(Period) validation
 // - Verification that the number of validators who signed the AggregatedSig exceeds 2/3 of the total
-type ScUpdateVerifierCircuit struct {
+type Eth2ScUpdateCircuit struct {
 	// BeaconBlockHeader fields (private inputs)
 	Slot          frontend.Variable // uint64
 	ProposerIndex frontend.Variable // uint64
@@ -65,7 +65,7 @@ type ScUpdateVerifierCircuit struct {
 }
 
 // Define implements the circuit constraints
-func (c *ScUpdateVerifierCircuit) Define(api frontend.API) error {
+func (c *Eth2ScUpdateCircuit) Define(api frontend.API) error {
 	// Step 1: Verify sync committee pubkeys hash using SHA2
 	err := c.verifyScPubKeysHash(api)
 	if err != nil {
@@ -109,7 +109,7 @@ func (c *ScUpdateVerifierCircuit) Define(api frontend.API) error {
 
 // computeBlockRoot computes the SSZ hash_tree_root of the beacon block header
 // This reuses the same logic as BlockRootHasher
-func (c *ScUpdateVerifierCircuit) computeBlockRoot(api frontend.API) [32]uints.U8 {
+func (c *Eth2ScUpdateCircuit) computeBlockRoot(api frontend.API) [32]uints.U8 {
 	// Convert each field to a 32-byte chunk
 	slotChunk := c.serializeUint64ToChunk(api, c.Slot)
 	proposerChunk := c.serializeUint64ToChunk(api, c.ProposerIndex)
@@ -141,7 +141,7 @@ func (c *ScUpdateVerifierCircuit) computeBlockRoot(api frontend.API) [32]uints.U
 //	domain: domain (32 bytes)
 //
 // Note: domain is hardcoded as a constant for Ethereum mainnet Fulu fork
-func (c *ScUpdateVerifierCircuit) computeSigningRoot(api frontend.API, blockRoot [32]uints.U8) [32]uints.U8 {
+func (c *Eth2ScUpdateCircuit) computeSigningRoot(api frontend.API, blockRoot [32]uints.U8) [32]uints.U8 {
 	// Convert DOMAIN bytes to []uints.U8
 	domain := uints.NewU8Array(DOMAIN[:])
 
@@ -152,7 +152,7 @@ func (c *ScUpdateVerifierCircuit) computeSigningRoot(api frontend.API, blockRoot
 
 // hashToG2InCircuit performs RFC 9380 hash_to_G2 for BLS12-381 G2
 // using expand_message_xmd(SHA-256) and ETH2 DST.
-func (c *ScUpdateVerifierCircuit) hashToG2InCircuit(
+func (c *Eth2ScUpdateCircuit) hashToG2InCircuit(
 	api frontend.API,
 	signingRoot [32]uints.U8,
 ) (*sw_bls12381.G2Affine, error) {
@@ -197,7 +197,7 @@ func (c *ScUpdateVerifierCircuit) hashToG2InCircuit(
 // tv[i][j] = uniform_bytes[L*(j + i*m) : L*(j + i*m) + L]   (i=0..1, j=0..1)
 // u[i].A0 = OS2IP(tv[i][0]) mod p
 // u[i].A1 = OS2IP(tv[i][1]) mod p
-func (c *ScUpdateVerifierCircuit) hashToFieldBLS12381Fp2(
+func (c *Eth2ScUpdateCircuit) hashToFieldBLS12381Fp2(
 	api frontend.API,
 	signingRoot [32]uints.U8,
 ) ([2]fields_bls12381.E2, error) {
@@ -366,7 +366,7 @@ func expandMessageXMD_SHA256(
 
 // bytesToBLS12381FpMod reduces a big-endian byte slice to a BLS12-381 Fp element.
 // Implements res = OS2IP(b) mod p via Horner evaluation to stay within limb width constraints.
-func (c *ScUpdateVerifierCircuit) bytesToBLS12381FpMod(
+func (c *Eth2ScUpdateCircuit) bytesToBLS12381FpMod(
 	api frontend.API,
 	fp *emulated.Field[sw_bls12381.BaseField],
 	byteAPI *uints.Bytes,
@@ -395,7 +395,7 @@ func (c *ScUpdateVerifierCircuit) bytesToBLS12381FpMod(
 //// verifyScPubKeysHash verifies that the commitment to sync committee pubkeys matches
 //// Uses SHA2 hash for compatibility
 //// Only hashes the first two limbs (Limbs[0], Limbs[1]) of each X coordinate for efficiency
-//func (c *ScUpdateVerifierCircuit) verifyScPubKeysHash(api frontend.API) error {
+//func (c *Eth2ScUpdateCircuit) verifyScPubKeysHash(api frontend.API) error {
 //	// Create SHA2 hasher
 //	hasher, err := sha2.New(api)
 //	if err != nil {
@@ -421,7 +421,7 @@ func (c *ScUpdateVerifierCircuit) bytesToBLS12381FpMod(
 //	return nil
 //}
 
-func (c *ScUpdateVerifierCircuit) verifyScPubKeysHash(api frontend.API) error {
+func (c *Eth2ScUpdateCircuit) verifyScPubKeysHash(api frontend.API) error {
 	// Create SHA2 hasher
 	hasher, err := sha2.New(api)
 	if err != nil {
@@ -449,7 +449,7 @@ func (c *ScUpdateVerifierCircuit) verifyScPubKeysHash(api frontend.API) error {
 
 // aggregatePubKeys aggregates public keys based on sync_committee_bits
 // Returns the aggregated public key for validators who participated in signing
-func (c *ScUpdateVerifierCircuit) aggregatePubKeys(api frontend.API) (*sw_bls12381.G1Affine, error) {
+func (c *Eth2ScUpdateCircuit) aggregatePubKeys(api frontend.API) (*sw_bls12381.G1Affine, error) {
 	// Create curve for G1 operations
 	curve, err := sw_emulated.New[sw_bls12381.BaseField, sw_bls12381.ScalarField](api, sw_emulated.GetBLS12381Params())
 	if err != nil {
@@ -492,7 +492,7 @@ func (c *ScUpdateVerifierCircuit) aggregatePubKeys(api frontend.API) (*sw_bls123
 // verifyBLSSignature verifies the BLS signature using pairing check
 // Verifies: e(pubkey, H(msg)) == e(G1, signature)
 // Or equivalently: e(pubkey, H(msg)) * e(-G1, signature) == 1
-func (c *ScUpdateVerifierCircuit) verifyBLSSignature(api frontend.API, aggregatedPubKey *sw_bls12381.G1Affine, signingRootG2 *sw_bls12381.G2Affine) error {
+func (c *Eth2ScUpdateCircuit) verifyBLSSignature(api frontend.API, aggregatedPubKey *sw_bls12381.G1Affine, signingRootG2 *sw_bls12381.G2Affine) error {
 	// Create pairing instance
 	pairing, err := sw_bls12381.NewPairing(api)
 	if err != nil {
@@ -538,7 +538,7 @@ func (c *ScUpdateVerifierCircuit) verifyBLSSignature(api frontend.API, aggregate
 // 1. Starting with leaf = NextScRoot
 // 2. For each branch node, compute parent = hash(left, right) where left/right depends on the path
 // 3. Final result should equal StateRoot
-func (c *ScUpdateVerifierCircuit) verifyNextSyncCommitteeMerkleProof(api frontend.API) error {
+func (c *Eth2ScUpdateCircuit) verifyNextSyncCommitteeMerkleProof(api frontend.API) error {
 	// NextSyncCommittee generalized index in Fulu BeaconState
 	// Position 23 (0-indexed) in BeaconState structure
 	// Generalized index = 2^depth + position = 64 + 23 = 87
@@ -578,7 +578,7 @@ func (c *ScUpdateVerifierCircuit) verifyNextSyncCommitteeMerkleProof(api fronten
 // Helper functions (reused from BlockRootHasher)
 
 // serializeLimbTo8Bytes converts a limb (frontend.Variable) to 8 bytes (64 bits, big-endian)
-func (c *ScUpdateVerifierCircuit) serializeLimbTo8Bytes(api frontend.API, limb frontend.Variable) []uints.U8 {
+func (c *Eth2ScUpdateCircuit) serializeLimbTo8Bytes(api frontend.API, limb frontend.Variable) []uints.U8 {
 	// Convert limb to 64 bits (little-endian)
 	bits := api.ToBinary(limb, 64)
 	bytes := make([]uints.U8, 8)
@@ -599,7 +599,7 @@ func (c *ScUpdateVerifierCircuit) serializeLimbTo8Bytes(api frontend.API, limb f
 }
 
 // serializeUint64ToChunk converts a 64-bit unsigned integer into a 32-byte array chunk with little-endian encoding.
-func (c *ScUpdateVerifierCircuit) serializeUint64ToChunk(api frontend.API, value frontend.Variable) [32]uints.U8 {
+func (c *Eth2ScUpdateCircuit) serializeUint64ToChunk(api frontend.API, value frontend.Variable) [32]uints.U8 {
 	var chunk [32]uints.U8
 
 	// Convert value to 64 bits (little-endian)
@@ -624,7 +624,7 @@ func (c *ScUpdateVerifierCircuit) serializeUint64ToChunk(api frontend.API, value
 	return chunk
 }
 
-func (c *ScUpdateVerifierCircuit) zeroChunk() [32]uints.U8 {
+func (c *Eth2ScUpdateCircuit) zeroChunk() [32]uints.U8 {
 	var chunk [32]uints.U8
 	for i := 0; i < 32; i++ {
 		chunk[i] = uints.NewU8(0)
@@ -633,7 +633,7 @@ func (c *ScUpdateVerifierCircuit) zeroChunk() [32]uints.U8 {
 }
 
 // hashPair computes the SHA256 hash of two 32-byte arrays (left and right) and returns the resulting 32-byte hash.
-func (c *ScUpdateVerifierCircuit) hashPair(api frontend.API, left, right [32]uints.U8) [32]uints.U8 {
+func (c *Eth2ScUpdateCircuit) hashPair(api frontend.API, left, right [32]uints.U8) [32]uints.U8 {
 	// Create a new SHA256 hasher
 	hasher, err := sha2.New(api)
 	if err != nil {

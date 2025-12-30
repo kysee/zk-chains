@@ -3,15 +3,20 @@ import path from 'path';
 import { createHash } from 'crypto';
 
 export function projectRoot(startPath = "."): string {
-    let currentPath = startPath;
+    let currentPath = path.resolve(startPath);
+
+    console.log("startPath:", startPath);
 
     while (currentPath !==
     path.parse(currentPath).root) {
         if (fs.existsSync(path.join(currentPath,
-            'package.json'))) {
+            'go.mod'))) {
+            console.log("found project root dir:", currentPath)
             return currentPath;
         }
         currentPath = path.dirname(currentPath);
+        console.log("next dir:", currentPath)
+
     }
 
     throw new Error('not found project root dir');

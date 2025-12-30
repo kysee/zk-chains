@@ -54,7 +54,7 @@ async function deploy() {
 
 
 	// Deploy LightClient
-	const scUpdate0 = loadSyncCommitteeUpdateData(`${projectRoot()}/../data/sc-update-1104.json`);
+	const scUpdate0 = loadSyncCommitteeUpdateData(`${projectRoot()}/data/sc-update-1104.json`);
 	const initialPeriod = 1n + BigInt(scUpdate0.data.attested_header.beacon.slot) / 8192n;
 	//expected "0x8bd26c003d619dc6aa13e4c7b31d01910a87f43da84070e6cbdd4d45a91da3f3";
 	const initialScPubkeysHash = scPubKeysHash(scUpdate0.data.next_sync_committee);
@@ -100,7 +100,7 @@ async function testLightClientUpdate(lightClientAddress: string) {
     console.log("Stored verifier address:", verifierAddress);
 
     // Test testScRoot
-    const scUpdate = loadSyncCommitteeUpdateData(`${projectRoot()}/../data/sc-update-1105.json`);
+    const scUpdate = loadSyncCommitteeUpdateData(`${projectRoot()}/data/sc-update-1105.json`);
     const slot = scUpdate.data.attested_header.beacon.slot;
     const nextSc = scUpdate.data.next_sync_committee;
     const szNextSc = syncCommitteeToBytes(nextSc);
@@ -118,7 +118,7 @@ async function testLightClientUpdate(lightClientAddress: string) {
     console.log("testScRoot result:", nextScRoot);
 
     // Test updateSyncCommittee
-    const proofData = loadProofData(`${projectRoot()}/../data/proof-data.json`)
+    const proofData = loadProofData(`${projectRoot()}/data/proof-data.json`)
     try {
         const estimatedGas = await lightClient.updateSyncCommittee.estimateGas(
             proofData.proof, proofData.commitments, proofData.commitmentPok,

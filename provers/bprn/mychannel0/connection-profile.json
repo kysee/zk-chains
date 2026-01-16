@@ -1,0 +1,72 @@
+{
+  "name": "bpn",
+  "version": "1.0.0",
+  "network": {
+    "commitTimeoutSeconds": 20,
+    "endorsementPolicyCount": 2,
+    "ordererRetryCount": 5,
+    "ordererRetryWaitTimeMs": 900
+  },
+  "clients": [
+    {
+      "organization": "Org1",
+      "mspId": "Org1MSP",
+      "id": "User1@org1.example.com",
+      "privateKeyPath": "crypto-config/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore/priv_sk",
+      "signedCertPath": "crypto-config/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/User1@org1.example.com-cert.pem"
+    }
+  ],
+  "channels": {
+    "mychannel0": {
+      "peers": {
+        "peer0.org1.example.com": {
+          "endorsingPeer": true,
+          "chaincodeQuery": true,
+          "ledgerQuery": true,
+          "eventSource": true
+        }
+      },
+      "orderers": ["orderer0.example.com"]
+    }
+  },
+  "organizations": {
+    "peerOrg1": {
+      "mspid": "Org1MSP",
+      "peers": ["peer0.org1.example.com"]
+    },
+    "OrdererOrg": {
+      "orderers": ["orderer0.example.com"]
+    }
+  },
+  "orderers": {
+    "orderer0.example.com": {
+      "mspid": "OrdererMSP",
+      "url": "grpcs://orderer0.example.com:7050",
+      "operationPort": "8443",
+      "grpcOptions": {
+        "ssl-target-name-override": "orderer0.example.com",
+        "hostnameOverride": "orderer0.example.com",
+        "grpc-wait-for-ready-timeout": 3000,
+        "request-timeout": 3000
+      },
+      "tlsCACerts": {
+        "path": "crypto-config/ordererOrganizations/example.com/orderers/orderer0.example.com/tls/ca.crt"
+      }
+    }
+  },
+  "peers": {
+    "peer0.org1.example.com": {
+      "url": "grpcs://peer0.org1.example.com:7051",
+      "operationPort": "9443",
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.org1.example.com",
+        "hostnameOverride": "peer0.org1.example.com",
+        "grpc-wait-for-ready-timeout": 3500,
+        "request-timeout": 3500
+      },
+      "tlsCACerts": {
+        "path": "crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
+      }
+    }
+  }
+}

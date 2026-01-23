@@ -387,8 +387,6 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 		err = proto.Unmarshal(action.Header, actionHeader)
 		require.NoError(t, err)
 
-		fmt.Println("creator", getSubjectFromCert(actionHeader.Creator))
-
 		// Parse ChaincodeActionPayload
 		actionPayload := &peer.ChaincodeActionPayload{}
 		err = proto.Unmarshal(action.Payload, actionPayload)
@@ -408,7 +406,7 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 		//printJson(fmt.Sprintf("envelop.payload.data(transaction).actions[%d].payload.chaincode_proposal_payload.input", j), chaincodeInvocationSpec)
 
 		if err == nil && chaincodeInvocationSpec.ChaincodeSpec != nil {
-			fmt.Printf("\tChaincode Name: %s\n", chaincodeInvocationSpec.ChaincodeSpec.ChaincodeId.Name)
+			fmt.Printf("\tChaincode: %s\n", chaincodeInvocationSpec.ChaincodeSpec.ChaincodeId.Name)
 			if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 0 {
 				if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 1 {
 					fmt.Printf("\tArgs:\n")

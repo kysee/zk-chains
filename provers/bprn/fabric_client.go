@@ -124,6 +124,11 @@ func (c *FabricClient) Close() {
 	}
 }
 
+// SDK returns the underlying FabricSDK instance
+func (c *FabricClient) SDK() *fabsdk.FabricSDK {
+	return c.sdk
+}
+
 // GetBlockByNumber queries a block by its number from the specified channel
 func (c *FabricClient) GetBlockByNumber(channelID string, userName string, orgName string, blockNumber uint64) (*common.Block, error) {
 	// Create a ledger client context

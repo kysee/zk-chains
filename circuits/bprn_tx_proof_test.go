@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -58,10 +59,9 @@ func TestBPrNTxProofCircuit_P256(t *testing.T) {
 
 	// Create witness
 	witness := BPrNTxProofCircuit{
-		T0:    toT0Array(t0Data),
-		T0Len: len(t0Data),
-		T1:    toT1Array(t1Data),
-		T1Len: len(t1Data),
+		TxLimbs:        toTxLimbs(txData),
+		TxLen:          len(txData),
+		InternalOffset: len(t0Data),
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
@@ -70,7 +70,7 @@ func TestBPrNTxProofCircuit_P256(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](s),
 		},
-		InternalBytes: toInternalBytesArray(internalData), // This also pads to 256
+		InternalBytes: toInternalBytesArray(internalDataPadded),
 	}
 
 	// Test that the circuit is satisfied
@@ -79,10 +79,8 @@ func TestBPrNTxProofCircuit_P256(t *testing.T) {
 	assert.NoError(err)
 
 	t.Logf("P256 ECDSA signature verification circuit test passed")
-	t.Logf("T0 length: %d bytes", len(t0Data))
-	t.Logf("Internal data length: %d bytes", len(internalData))
-	t.Logf("T1 length: %d bytes", len(t1Data))
-	t.Logf("Total transaction length: %d bytes", len(txData))
+	t.Logf("Tx length: %d bytes", len(txData))
+	t.Logf("InternalOffset: %d", len(t0Data))
 	t.Logf("TxHash: %x", txHash)
 }
 
@@ -104,6 +102,8 @@ func TestBPrNTxProofCircuit_WrongInternalBytes(t *testing.T) {
 
 	// Wrong internal data (different from what's in txData)
 	wrongInternalData := []byte("wrong_data!!")
+	wrongInternalDataPadded := make([]byte, InternalBytesSize)
+	copy(wrongInternalDataPadded, wrongInternalData)
 
 	txHash := sha256.Sum256(txData)
 
@@ -115,10 +115,9 @@ func TestBPrNTxProofCircuit_WrongInternalBytes(t *testing.T) {
 	var circuit BPrNTxProofCircuit
 
 	witness := BPrNTxProofCircuit{
-		T0:    toT0Array(t0Data),
-		T0Len: len(t0Data),
-		T1:    toT1Array(t1Data),
-		T1Len: len(t1Data),
+		TxLimbs:        toTxLimbs(txData),
+		TxLen:          len(txData),
+		InternalOffset: len(t0Data),
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
@@ -127,13 +126,13 @@ func TestBPrNTxProofCircuit_WrongInternalBytes(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](s),
 		},
-		InternalBytes: toInternalBytesArray(wrongInternalData), // Wrong!
+		InternalBytes: toInternalBytesArray(wrongInternalDataPadded), // Wrong!
 	}
 
 	// Test that the circuit FAILS when InternalBytes doesn't match
 	assert := test.NewAssert(t)
 	err = test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
-	assert.Error(err, "circuit should fail when hash(T0+wrong+T1) != TxHash")
+	assert.Error(err, "circuit should fail when InternalBytes doesn't match")
 
 	t.Logf("Wrong InternalBytes - correctly rejected")
 }
@@ -166,10 +165,9 @@ func TestBPrNTxProofCircuit_InvalidSignature(t *testing.T) {
 	var circuit BPrNTxProofCircuit
 
 	witness := BPrNTxProofCircuit{
-		T0:    toT0Array(t0Data),
-		T0Len: len(t0Data),
-		T1:    toT1Array(t1Data),
-		T1Len: len(t1Data),
+		TxLimbs:        toTxLimbs(txData),
+		TxLen:          len(txData),
+		InternalOffset: len(t0Data),
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
@@ -178,7 +176,7 @@ func TestBPrNTxProofCircuit_InvalidSignature(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](invalidS), // Invalid!
 		},
-		InternalBytes: toInternalBytesArray(internalData),
+		InternalBytes: toInternalBytesArray(internalDataPadded),
 	}
 
 	assert := test.NewAssert(t)
@@ -196,9 +194,9 @@ func TestBPrNTxProofCircuit_Compile(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Logf("Circuit compiled successfully")
-	t.Logf("T0 max size: %d bytes", T0MaxSize)
+	t.Logf("Tx max size: %d bytes", TxMaxSize)
+	t.Logf("Tx limb size: %d limbs", TxLimbSize)
 	t.Logf("InternalBytes size: %d bytes", InternalBytesSize)
-	t.Logf("T1 max size: %d bytes", T1MaxSize)
 	t.Logf("Number of constraints: %d", ccs.GetNbConstraints())
 	t.Logf("Number of public inputs: %d", ccs.GetNbPublicVariables())
 	t.Logf("Number of secret inputs: %d", ccs.GetNbSecretVariables())
@@ -247,34 +245,22 @@ func parseDERSignature(t *testing.T, sigDER []byte) (*big.Int, *big.Int) {
 
 // Helper functions to create arrays from slices
 
-func toT0Array(data []byte) [T0MaxSize]uints.U8 {
-	var res [T0MaxSize]uints.U8
-	for i, b := range data {
-		if i >= T0MaxSize {
-			break
-		}
-		res[i] = uints.NewU8(b)
-	}
-	// Remaining elements are already 0-initialized (Val is nil, which is interpreted as 0 in gnark usually, or we should set it)
-	// uints.NewU8(0) creates a U8 with Val=0.
-	// The default value of uints.U8 has Val=nil.
-	// We should probably explicitly set them to 0 to be safe, although gnark might handle nil.
-	for i := len(data); i < T0MaxSize; i++ {
-		res[i] = uints.NewU8(0)
-	}
-	return res
-}
+func toTxLimbs(data []byte) [TxLimbSize]frontend.Variable {
+	var res [TxLimbSize]frontend.Variable
 
-func toT1Array(data []byte) [T1MaxSize]uints.U8 {
-	var res [T1MaxSize]uints.U8
-	for i, b := range data {
-		if i >= T1MaxSize {
-			break
+	// Pad data to multiple of 8
+	paddedLen := (len(data) + 7) / 8 * 8
+	paddedData := make([]byte, paddedLen)
+	copy(paddedData, data)
+
+	for i := 0; i < TxLimbSize; i++ {
+		if i*8 >= len(paddedData) {
+			res[i] = 0
+			continue
 		}
-		res[i] = uints.NewU8(b)
-	}
-	for i := len(data); i < T1MaxSize; i++ {
-		res[i] = uints.NewU8(0)
+		// Little Endian packing
+		limbBytes := paddedData[i*8 : i*8+8]
+		res[i] = binary.LittleEndian.Uint64(limbBytes)
 	}
 	return res
 }

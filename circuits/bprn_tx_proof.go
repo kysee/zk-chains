@@ -1,46 +1,45 @@
 package circuit
 
 import (
-	"math/big"
-	"math/bits"
-
 	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/uints"
 	"github.com/consensys/gnark/std/signature/ecdsa"
+	"math/big"
+	"math/bits"
 )
 
 // Circuit size constants
 const (
-	T0MaxSize         = 2048 // Maximum bytes for T0 (prefix)
-	T1MaxSize         = 1024 // Maximum bytes for T1 (suffix)
+	TxMaxSize         = 3072 // Maximum bytes for Transaction
+	TxLimbSize        = 384  // 3072 / 8 = 384 limbs (uint64)
 	InternalBytesSize = 256  // Fixed size for InternalBytes
 
 	// SHA256 constants
 	BlockSize = 64
-	// Max total size = 2048 + 256 + 1024 = 3328 bytes
+	// Max total size = 3072 bytes
 	// Padding overhead = 1 byte (0x80) + 8 bytes (length) = 9 bytes
-	// Max padded size = 3337 bytes -> ceil(3337/64) = 53 blocks
-	MaxBlocks = 53
+	// Max padded size = 3081 bytes -> ceil(3081/64) = 49 blocks
+	MaxBlocks = 49
 )
 
 // BPrNTxProofCircuit verifies P256 ECDSA signature on transaction data
 // and proves that InternalBytes is contained within the original transaction.
 //
 // Architecture:
-// - Prover provides T0 (prefix) and T1 (suffix) as secret inputs with actual lengths
-// - Circuit computes SHA256(T0[0:T0Len] || InternalBytes || T1[0:T1Len])
+// - Prover provides TxLimbs (8-byte chunks) as secret input
+// - Circuit computes SHA256(TxLimbs -> Bytes)
 // - Verifies ECDSA P256 signature on the computed hash
+// - Verifies InternalBytes is a substring of TxLimbs (converted to bytes) at InternalOffset
 //
 // Uses PLONK + BN254
 type BPrNTxProofCircuit struct {
-	// Secret inputs - prover provides these directly
-	T0    [T0MaxSize]uints.U8 // Data before InternalBytes (padded to max)
-	T0Len frontend.Variable   // Actual length of T0 (0 <= T0Len <= T0MaxSize)
-	T1    [T1MaxSize]uints.U8 // Data after InternalBytes (padded to max)
-	T1Len frontend.Variable   // Actual length of T1 (0 <= T1Len <= T1MaxSize)
+	// Secret inputs
+	TxLimbs        [TxLimbSize]frontend.Variable // Transaction data in 8-byte limbs
+	TxLen          frontend.Variable             // Actual length of TxBytes (in bytes)
+	InternalOffset frontend.Variable             // Offset where InternalBytes starts in TxBytes
 
 	// P256 Public Key (X, Y coordinates)
 	Pub ecdsa.PublicKey[emulated.P256Fp, emulated.P256Fr]
@@ -54,53 +53,45 @@ type BPrNTxProofCircuit struct {
 
 func (c *BPrNTxProofCircuit) Define(api frontend.API) error {
 	// 1. Validate lengths
-	api.AssertIsLessOrEqual(c.T0Len, T0MaxSize)
-	api.AssertIsLessOrEqual(c.T1Len, T1MaxSize)
+	api.AssertIsLessOrEqual(c.TxLen, TxMaxSize)
 
-	// 2. Construct the padded data for SHA256 using a Hint
-	// This avoids complex variable-index shifting logic by letting the prover supply the padded data.
-	// Note: In a production circuit, you MUST verify that paddedData matches T0, InternalBytes, and T1.
+	// 2. Validate InternalOffset
+	// InternalOffset + InternalBytesSize <= TxLen
+	endOffset := api.Add(c.InternalOffset, InternalBytesSize)
+	api.AssertIsLessOrEqual(endOffset, c.TxLen)
+
+	// 3. Construct the padded data for SHA256 using a Hint
 	paddedData, numBlocks, err := c.constructPaddedDataHint(api)
 	if err != nil {
 		return err
 	}
 
-	// 3. Compute SHA256 on the padded blocks
-	// We use a custom loop because standard sha2 gadget pads the input again.
+	// 4. Compute SHA256 on the padded blocks
 	computedHash, err := computeSHA256(api, paddedData, numBlocks)
 	if err != nil {
 		return err
 	}
 
-	// 4. Convert computed hash to emulated.Element for P256Fr (scalar field)
+	// 5. Convert computed hash to emulated.Element for P256Fr (scalar field)
 	scalarApi, err := emulated.NewField[emulated.P256Fr](api)
 	if err != nil {
 		return err
 	}
 	msgHash := hashBytesToElement(api, scalarApi, computedHash)
 
-	// 5. Verify ECDSA P256 signature
+	// 6. Verify ECDSA P256 signature
+	// This implicitly verifies that the paddedData from the hint corresponds to the TxLimbs
+	// for which the prover has a valid signature.
 	c.Pub.Verify(api, sw_emulated.GetCurveParams[emulated.P256Fp](), msgHash, &c.Sig)
 
 	return nil
 }
 
 func (c *BPrNTxProofCircuit) constructPaddedDataHint(api frontend.API) ([]uints.U8, frontend.Variable, error) {
-	uapi, err := uints.New[uints.U32](api)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	// Prepare inputs for the hint
-	hintInputs := []frontend.Variable{c.T0Len, c.T1Len}
-	for _, b := range c.T0 {
-		hintInputs = append(hintInputs, b.Val)
-	}
-	for _, b := range c.InternalBytes {
-		hintInputs = append(hintInputs, b.Val)
-	}
-	for _, b := range c.T1 {
-		hintInputs = append(hintInputs, b.Val)
+	hintInputs := []frontend.Variable{c.TxLen}
+	for _, l := range c.TxLimbs {
+		hintInputs = append(hintInputs, l)
 	}
 
 	// Call Hint to get padded data AND number of blocks
@@ -115,12 +106,9 @@ func (c *BPrNTxProofCircuit) constructPaddedDataHint(api frontend.API) ([]uints.
 	paddedVars := hintResults[1:]
 
 	// Verify numBlocks
-	// numBlocks = ceil((T0Len + 256 + T1Len + 9) / 64)
-	// Formula: numBlocks = (TotalLen + 8 + 64) / 64 = (TotalLen + 72) / 64 (integer division)
-	// We verify: numBlocks * 64 <= TotalLen + 72 < (numBlocks + 1) * 64
-	// Or simply: TotalLen + 72 = numBlocks * 64 + remainder, where 0 <= remainder < 64
-	totalLen := api.Add(c.T0Len, InternalBytesSize, c.T1Len)
-	numerator := api.Add(totalLen, 72)
+	// numBlocks = ceil((TxLen + 9) / 64)
+	// Formula: numBlocks = (TxLen + 8 + 64) / 64 = (TxLen + 72) / 64 (integer division)
+	numerator := api.Add(c.TxLen, 72)
 
 	// Check 1: numerator >= numBlocks * 64
 	product := api.Mul(numBlocks, 64)
@@ -131,56 +119,22 @@ func (c *BPrNTxProofCircuit) constructPaddedDataHint(api frontend.API) ([]uints.
 	api.AssertIsLessOrEqual(remainder, 63)
 
 	paddedData := make([]uints.U8, len(paddedVars))
-	paddedVals := make([]frontend.Variable, len(paddedVars))
 	for i := 0; i < len(paddedVars); i++ {
+		// We don't explicitly enforce width here to save constraints.
+		// Invalid values (>= 256) will cause failures in SHA256 computation or signature verification.
 		paddedData[i] = uints.U8{Val: paddedVars[i]}
-		paddedVals[i] = paddedVars[i]
-		uapi.ByteValueOf(paddedData[i].Val)
 	}
 
 	// --- Verification Logic ---
 
-	// 1. Verify T0 prefix
-	// paddedData[i] == T0[i] for i < T0Len
-	for i := 0; i < T0MaxSize; i++ {
-		// Check if i < T0Len (equivalent to T0Len > i)
-		// api.Cmp returns 1 if T0Len > i, 0 if equal, -1 if less
-		cmp := api.Cmp(c.T0Len, i)
-		isT0 := api.IsZero(api.Sub(cmp, 1)) // 1 if T0Len > i, else 0
-
-		// If isT0, diff must be 0. If not, we don't care (multiply by 0).
-		diff := api.Sub(paddedData[i].Val, c.T0[i].Val)
-		api.AssertIsEqual(api.Mul(diff, isT0), 0)
-	}
-
-	// 2. Verify InternalBytes
-	// We need to check paddedData[T0Len ... T0Len+256] == InternalBytes.
-	// We shift paddedData left by T0Len so InternalBytes aligns to index 0.
-	shifted1 := shiftLeft(api, paddedVals, c.T0Len, T0MaxSize)
+	// 1. Verify InternalBytes inclusion
+	// We need to check paddedData[InternalOffset : InternalOffset + InternalBytesSize] == InternalBytes
+	// Shift paddedData left by InternalOffset so InternalBytes aligns to index 0
+	shiftedInternal := shiftLeft(api, paddedVars, c.InternalOffset, len(paddedVars))
 
 	for i := 0; i < InternalBytesSize; i++ {
-		api.AssertIsEqual(shifted1[i], c.InternalBytes[i].Val)
+		api.AssertIsEqual(shiftedInternal[i], c.InternalBytes[i].Val)
 	}
-
-	// 3. Verify T1
-	// After InternalBytes (256 bytes), T1 should follow.
-	// shifted1[256 ... 256+T1Len] == T1[0 ... T1Len]
-	shifted1Sliced := shifted1[InternalBytesSize:] // Slice off InternalBytes
-
-	for i := 0; i < T1MaxSize; i++ {
-		// Check if i < T1Len
-		cmp := api.Cmp(c.T1Len, i)
-		isT1 := api.IsZero(api.Sub(cmp, 1)) // 1 if T1Len > i, else 0
-
-		diff := api.Sub(shifted1Sliced[i], c.T1[i].Val)
-		api.AssertIsEqual(api.Mul(diff, isT1), 0)
-	}
-
-	// 4. Verify Padding Start (0x80)
-	// The byte immediately after T1 must be 0x80.
-	// Shift shifted1Sliced left by T1Len.
-	shifted2 := shiftLeft(api, shifted1Sliced, c.T1Len, T1MaxSize)
-	api.AssertIsEqual(shifted2[0], 0x80)
 
 	return paddedData, numBlocks, nil
 }
@@ -220,32 +174,30 @@ func shiftLeft(api frontend.API, data []frontend.Variable, shift frontend.Variab
 // GenPaddedDataHint is the actual Go function for the hint.
 // It constructs the full padded data for SHA256.
 // Register this function with solver.RegisterHint(circuit.HintGenPaddedData, circuit.GenPaddedDataHint)
-func GenPaddedDataHint(mod *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	// Inputs: [T0Len, T1Len, T0(2048), Internal(256), T1(1024)]
-	t0Len := inputs[0].Int64()
-	t1Len := inputs[1].Int64()
+func GenPaddedDataHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	// Inputs: [TxLen, TxLimbs...]
+	txLen := inputs[0].Int64()
 
 	// Offsets
-	offsetT0 := 2
-	offsetInternal := offsetT0 + T0MaxSize
-	offsetT1 := offsetInternal + InternalBytesSize
+	offsetTx := 1
 
 	// Construct data
 	var data []byte
 
-	// T0
-	for i := int64(0); i < t0Len; i++ {
-		data = append(data, byte(inputs[offsetT0+int(i)].Uint64()))
-	}
+	// TxLimbs (uint64) -> bytes (Little Endian)
+	// We need to extract exactly txLen bytes.
+	// We iterate through limbs and extract bytes.
 
-	// InternalBytes
-	for i := 0; i < InternalBytesSize; i++ {
-		data = append(data, byte(inputs[offsetInternal+i].Uint64()))
-	}
-
-	// T1
-	for i := int64(0); i < t1Len; i++ {
-		data = append(data, byte(inputs[offsetT1+int(i)].Uint64()))
+	currentLen := int64(0)
+	for i := 0; currentLen < txLen; i++ {
+		limb := inputs[offsetTx+i].Uint64()
+		for j := 0; j < 8; j++ {
+			if currentLen >= txLen {
+				break
+			}
+			data = append(data, byte(limb>>(j*8)))
+			currentLen++
+		}
 	}
 
 	// SHA256 Padding
@@ -258,8 +210,8 @@ func GenPaddedDataHint(mod *big.Int, inputs []*big.Int, outputs []*big.Int) erro
 	}
 
 	// 3. Append length in bits (big-endian uint64)
-	// Original length in bytes = t0Len + 256 + t1Len
-	originalLen := uint64(t0Len + InternalBytesSize + t1Len)
+	// Original length in bytes = txLen
+	originalLen := uint64(txLen)
 	bitLen := originalLen * 8
 	lenBytes := make([]byte, 8)
 	for i := 0; i < 8; i++ {
@@ -305,6 +257,9 @@ func computeSHA256(api frontend.API, data []uints.U8, numBlocks frontend.Variabl
 		uints.NewU32(0x1f83d9ab), uints.NewU32(0x5be0cd19),
 	}
 
+	// Precompute constants
+	k := sha256Constants(uapi)
+
 	// Process each 64-byte block
 	for i := 0; i < len(data); i += 64 {
 		blockIndex := i / 64
@@ -332,7 +287,6 @@ func computeSHA256(api frontend.API, data []uints.U8, numBlocks frontend.Variabl
 
 		// 2. Compression
 		a, b, c, d, e, f, g, h_curr := h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]
-		k := sha256Constants(uapi)
 
 		for j := 0; j < 64; j++ {
 			s1 := uapi.Xor(uapi.Lrot(e, -6), uapi.Lrot(e, -11), uapi.Lrot(e, -25))

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -66,7 +67,11 @@ func LoadOrSetupCircuit_Groth16(outDir string, c frontend.Circuit) (constraint.C
 
 	if err0 != nil || err1 != nil {
 		fmt.Println("[groth16] Generating proving and verifying keys...")
+
+		tm0 := time.Now()
 		pk, vk, err = groth16.Setup(ccs)
+		fmt.Printf("Setup time: %v\n", time.Since(tm0))
+
 		if err != nil {
 			panic(err)
 		}
@@ -79,12 +84,17 @@ func LoadOrSetupCircuit_Groth16(outDir string, c frontend.Circuit) (constraint.C
 		fmt.Println("[groth16] Loading proving and verifying keys...")
 		pk = groth16.NewProvingKey(ecc.BN254)
 		vk = groth16.NewVerifyingKey(ecc.BN254)
+
+		tm0 := time.Now()
 		if _, err := pk.ReadFrom(fpk); err != nil {
 			panic(err)
 		}
+		fmt.Printf("[groth16] Load ProvingKey time: %v\n", time.Since(tm0))
+		tm0 = time.Now()
 		if _, err := vk.ReadFrom(fvk); err != nil {
 			panic(err)
 		}
+		fmt.Printf("[groth16] Load VerifyingKey time: %v\n", time.Since(tm0))
 	}
 	fmt.Println("[groth16] ✓ Setup complete")
 	return ccs, pk, vk

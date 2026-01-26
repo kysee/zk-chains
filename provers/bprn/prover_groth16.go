@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -28,7 +29,7 @@ type TxProverGroth16 struct {
 }
 
 func NewTxProverGroth16() *TxProverGroth16 {
-	fmt.Println("Create TxProverPlonk ...")
+	fmt.Println("Create TxProverGroth16 ...")
 
 	var circuit circuits.BPrNTxProofCircuit
 
@@ -53,7 +54,7 @@ func NewTxProverGroth16() *TxProverGroth16 {
 	//	panic(err)
 	//}
 
-	fmt.Println("Generating proving key and verifying key...")
+	//// fmt.Println("Generating proving key and verifying key...")
 
 	//pk, vk, err := plonk.Setup(ccs, srs, srsLagrange)
 	//if err != nil {
@@ -97,7 +98,23 @@ func (prover *TxProverGroth16) Prove(data interface{}) ([][]byte, error) {
 		}
 
 		witness, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
+		tm0 := time.Now()
 		proof, err := groth16.Prove(prover.ccs, prover.pk, witness)
+		since := time.Since(tm0)
+		fmt.Printf("Proof generation time: %v\n", since)
+		if err != nil {
+			return nil, err
+		}
+
+		// for test
+		pubWtn, err := witness.Public()
+		if err != nil {
+			return nil, err
+		}
+		tm0 = time.Now()
+		err = groth16.Verify(proof, prover.vk, pubWtn)
+		since = time.Since(tm0)
+		fmt.Printf("Verify time: %v\n", since)
 		if err != nil {
 			return nil, err
 		}

@@ -54,7 +54,7 @@ func NewTxProverPlonk() *TxProverPlonk {
 	//	panic(err)
 	//}
 
-	fmt.Println("Generating proving key and verifying key...")
+	//// fmt.Println("Generating proving key and verifying key...")
 
 	//pk, vk, err := plonk.Setup(ccs, srs, srsLagrange)
 	//if err != nil {

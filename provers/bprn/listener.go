@@ -92,52 +92,6 @@ func getChaincodeActionPayload(block *common.Block) ([]*peer.ChaincodeActionPayl
 			return nil, err
 		}
 		ret = append(ret, actionPayload)
-		////printJson(fmt.Sprintf("block.data.data[%d](envelope)", i), envelope)
-		//
-		//// Step 2: Parse the Payload from Envelope
-		//payload := &common.Payload{}
-		//err = proto.Unmarshal(envelope.Payload, payload)
-		//
-		////printJson("envelope.payload", payload)
-		//
-		//// Step 3: Parse ChannelHeader to determine the type
-		//channelHeader := &common.ChannelHeader{}
-		//err = proto.Unmarshal(payload.Header.ChannelHeader, channelHeader)
-		//require.NoError(t, err)
-		////printJson("envelop.payload.header.channel_header", channelHeader)
-		//
-		//// signatureHeader == creator(e.g. client application)
-		//signatureHeader := &common.SignatureHeader{}
-		//err = proto.Unmarshal(payload.Header.SignatureHeader, signatureHeader)
-		//require.NoError(t, err)
-		////printJson("envelop.ayload.header.signature_header", signatureHeader)
-		//
-		//fmt.Println("txId", channelHeader.TxId)
-		//fmt.Println("channelId", channelHeader.ChannelId)
-		//fmt.Println("creator", getSubjectFromCert(signatureHeader.Creator))
-		//
-		//// Step 4: Parse payload.Data based on the type
-		//switch common.HeaderType(channelHeader.Type) {
-		//case common.HeaderType_CONFIG:
-		//	parseConfigTransaction(t, payload)
-		//
-		//case common.HeaderType_CONFIG_UPDATE:
-		//	parseConfigUpdateTransaction(t, payload)
-		//
-		//case common.HeaderType_ENDORSER_TRANSACTION:
-		//	parseEndorserTransaction(t, payload)
-		//
-		//case common.HeaderType_ORDERER_TRANSACTION:
-		//	fmt.Println("\t  [ORDERER_TRANSACTION - System transaction]")
-		//
-		//case common.HeaderType_MESSAGE:
-		//	fmt.Println("\t  [MESSAGE]")
-		//
-		//default:
-		//	fmt.Printf("\t  [Unknown/Unhandled type: %d]\n", channelHeader.Type)
-		//}
-		//
-		//fmt.Println()
 	}
 	return ret, nil
 }

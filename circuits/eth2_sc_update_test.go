@@ -1,4 +1,4 @@
-package circuit
+package circuits
 
 import (
 	"crypto/sha256"
@@ -28,7 +28,7 @@ import (
 
 var rootDir = mustGetRootDir()
 
-// Global variables for circuit compilation and setup (initialized once in init())
+// Global variables for circuits compilation and setup (initialized once in init())
 var (
 	blsVerifierCCS constraint.ConstraintSystem
 	blsVerifierPK  groth16.ProvingKey
@@ -125,13 +125,13 @@ func TestEth2ScUpdateCircuit_IsSolved(t *testing.T) {
 	// Assign next_sync_committee root and branch to witness
 	assignNextSyncCommitteeToWitness(&update, witness)
 
-	// Test the circuit using gnark test framework
+	// Test the circuits using gnark test framework
 	assert := gnark_test.NewAssert(t)
 	err = gnark_test.IsSolved(&Eth2ScUpdateCircuit{}, witness, ecc.BN254.ScalarField())
 	assert.NoError(err, "Circuit constraints should be satisfied")
 	t.Logf("✓ Proof solving SUCCEEDED!")
 
-	//assert.CheckCircuit(&circuit.Eth2ScUpdateCircuit{}, gnark_test.WithCurves(ecc.BN254), gnark_test.WithValidAssignment(witness), gnark_test.WithBackends(backend.GROTH16))
+	//assert.CheckCircuit(&circuits.Eth2ScUpdateCircuit{}, gnark_test.WithCurves(ecc.BN254), gnark_test.WithValidAssignment(witness), gnark_test.WithBackends(backend.GROTH16))
 }
 
 func TestEth2ScUpdateCircuit(t *testing.T) {
@@ -223,7 +223,7 @@ func TestEth2ScUpdateCircuit(t *testing.T) {
 	fullWitness, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
 	require.NoError(t, err, "Failed to create witness")
 
-	// Create proof using pre-compiled circuit and keys
+	// Create proof using pre-compiled circuits and keys
 	proof, err := groth16.Prove(blsVerifierCCS, blsVerifierPK, fullWitness,
 		backend.WithProverHashToFieldFunction(sha256.New()),
 		backend.WithSolverOptions(
@@ -458,7 +458,7 @@ func TestEth2ScUpdateCircuitInvalidBlockRoot(t *testing.T) {
 	t.Logf("✓ Proof generation correctly failed with invalid block root: %v", err)
 }
 
-// Benchmark the circuit
+// Benchmark the circuits
 func BenchmarkEth2ScUpdateCircuit(b *testing.B) {
 	onceSetupCircuit()
 
@@ -551,14 +551,14 @@ func BenchmarkEth2ScUpdateCircuit(b *testing.B) {
 	})
 }
 
-// Compile the circuit and performs setup once for all tests
+// Compile the circuits and performs setup once for all tests
 func onceSetupCircuit() {
 	if blsVerifierCCS != nil {
 		fmt.Println("Circuit already compiled and setup")
 		return
 	}
 	//
-	// Compile circuit
+	// Compile circuits
 	var err error
 
 	ccsPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.ccs")
@@ -570,7 +570,7 @@ func onceSetupCircuit() {
 	defer fCcs.Close()
 
 	if err != nil {
-		fmt.Println("Compiling Eth2ScUpdateCircuit circuit...")
+		fmt.Println("Compiling Eth2ScUpdateCircuit circuits...")
 		// Compile with BN254 scalar field (for emulated BLS12-381)
 		blsVerifierCCS, err = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &Eth2ScUpdateCircuit{})
 		if err != nil {
@@ -579,7 +579,7 @@ func onceSetupCircuit() {
 		fCcs, _ = os.Create(ccsPath)
 		_, _ = blsVerifierCCS.WriteTo(fCcs)
 	} else {
-		fmt.Println("Loading Eth2ScUpdateCircuit circuit...")
+		fmt.Println("Loading Eth2ScUpdateCircuit circuits...")
 
 		blsVerifierCCS = groth16.NewCS(ecc.BN254)
 		_, err = blsVerifierCCS.ReadFrom(fCcs)

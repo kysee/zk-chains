@@ -1,21 +1,23 @@
-package circuit
+package circuits
 
 import (
+	"encoding/binary"
+	"math/big"
+	"math/bits"
+
 	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/uints"
-	"github.com/consensys/gnark/std/signature/ecdsa"
-	"math/big"
-	"math/bits"
+	gnark_ecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 )
 
 // Circuit size constants
 const (
-	TxMaxSize         = 3072 // Maximum bytes for Transaction
-	TxLimbSize        = 384  // 3072 / 8 = 384 limbs (uint64)
-	InternalBytesSize = 256  // Fixed size for InternalBytes
+	TxMaxSize      = 3072 // Maximum bytes for Transaction
+	TxLimbSize     = 384  // 3072 / 8 = 384 limbs (uint64)
+	InnerBytesSize = 256  // Fixed size for InnerBytes
 
 	// SHA256 constants
 	BlockSize = 64
@@ -26,38 +28,38 @@ const (
 )
 
 // BPrNTxProofCircuit verifies P256 ECDSA signature on transaction data
-// and proves that InternalBytes is contained within the original transaction.
+// and proves that InnerBytes is contained within the original transaction.
 //
 // Architecture:
 // - Prover provides TxLimbs (8-byte chunks) as secret input
 // - Circuit computes SHA256(TxLimbs -> Bytes)
 // - Verifies ECDSA P256 signature on the computed hash
-// - Verifies InternalBytes is a substring of TxLimbs (converted to bytes) at InternalOffset
+// - Verifies InnerBytes is a substring of TxLimbs (converted to bytes) at InnerOffset
 //
 // Uses PLONK + BN254
 type BPrNTxProofCircuit struct {
 	// Secret inputs
-	TxLimbs        [TxLimbSize]frontend.Variable // Transaction data in 8-byte limbs
-	TxLen          frontend.Variable             // Actual length of TxBytes (in bytes)
-	InternalOffset frontend.Variable             // Offset where InternalBytes starts in TxBytes
+	TxLimbs     [TxLimbSize]frontend.Variable // Transaction data in 8-byte limbs
+	TxLen       frontend.Variable             // Actual length of TxBytes (in bytes)
+	InnerOffset frontend.Variable             // Offset where InnerBytes starts in TxBytes
 
 	// P256 Public Key (X, Y coordinates)
-	Pub ecdsa.PublicKey[emulated.P256Fp, emulated.P256Fr]
+	Pub gnark_ecdsa.PublicKey[emulated.P256Fp, emulated.P256Fr]
 
 	// P256 Signature (R, S values)
-	Sig ecdsa.Signature[emulated.P256Fr]
+	Sig gnark_ecdsa.Signature[emulated.P256Fr]
 
 	// Public input
-	InternalBytes [InternalBytesSize]uints.U8 `gnark:",public"` // Data proven to be in transaction
+	InnerBytes [InnerBytesSize]uints.U8 `gnark:",public"` // Data proven to be in transaction
 }
 
 func (c *BPrNTxProofCircuit) Define(api frontend.API) error {
 	// 1. Validate lengths
 	api.AssertIsLessOrEqual(c.TxLen, TxMaxSize)
 
-	// 2. Validate InternalOffset
-	// InternalOffset + InternalBytesSize <= TxLen
-	endOffset := api.Add(c.InternalOffset, InternalBytesSize)
+	// 2. Validate InnerOffset
+	// InnerOffset + InnerBytesSize <= TxLen
+	endOffset := api.Add(c.InnerOffset, InnerBytesSize)
 	api.AssertIsLessOrEqual(endOffset, c.TxLen)
 
 	// 3. Construct the padded data for SHA256 using a Hint
@@ -127,13 +129,13 @@ func (c *BPrNTxProofCircuit) constructPaddedDataHint(api frontend.API) ([]uints.
 
 	// --- Verification Logic ---
 
-	// 1. Verify InternalBytes inclusion
-	// We need to check paddedData[InternalOffset : InternalOffset + InternalBytesSize] == InternalBytes
-	// Shift paddedData left by InternalOffset so InternalBytes aligns to index 0
-	shiftedInternal := shiftLeft(api, paddedVars, c.InternalOffset, len(paddedVars))
+	// 1. Verify InnerBytes inclusion
+	// We need to check paddedData[InnerOffset : InnerOffset + InnerBytesSize] == InnerBytes
+	// Shift paddedData left by InnerOffset so InnerBytes aligns to index 0
+	shiftedInternal := shiftLeft(api, paddedVars, c.InnerOffset, len(paddedVars))
 
-	for i := 0; i < InternalBytesSize; i++ {
-		api.AssertIsEqual(shiftedInternal[i], c.InternalBytes[i].Val)
+	for i := 0; i < InnerBytesSize; i++ {
+		api.AssertIsEqual(shiftedInternal[i], c.InnerBytes[i].Val)
 	}
 
 	return paddedData, numBlocks, nil
@@ -173,7 +175,7 @@ func shiftLeft(api frontend.API, data []frontend.Variable, shift frontend.Variab
 
 // GenPaddedDataHint is the actual Go function for the hint.
 // It constructs the full padded data for SHA256.
-// Register this function with solver.RegisterHint(circuit.HintGenPaddedData, circuit.GenPaddedDataHint)
+// Register this function with solver.RegisterHint(circuits.HintGenPaddedData, circuits.GenPaddedDataHint)
 func GenPaddedDataHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	// Inputs: [TxLen, TxLimbs...]
 	txLen := inputs[0].Int64()
@@ -375,6 +377,43 @@ func SelectU32(uapi *uints.BinaryField[uints.U32], selector frontend.Variable, a
 	var res uints.U32
 	for i := 0; i < 4; i++ {
 		res[i] = uapi.Select(selector, a[i], b[i])
+	}
+	return res
+}
+
+// Helper functions to create arrays from slices
+
+// ParseDERSignature parses a DER-encoded ECDSA signature
+func ToLimbs(data []byte) [TxLimbSize]frontend.Variable {
+	var res [TxLimbSize]frontend.Variable
+
+	// Pad data to multiple of 8
+	paddedLen := (len(data) + 7) / 8 * 8
+	paddedData := make([]byte, paddedLen)
+	copy(paddedData, data)
+
+	for i := 0; i < TxLimbSize; i++ {
+		if i*8 >= len(paddedData) {
+			res[i] = 0
+			continue
+		}
+		// Little Endian packing
+		limbBytes := paddedData[i*8 : i*8+8]
+		res[i] = binary.LittleEndian.Uint64(limbBytes)
+	}
+	return res
+}
+
+func ToU8Array(data []byte) [InnerBytesSize]uints.U8 {
+	var res [InnerBytesSize]uints.U8
+	for i, b := range data {
+		if i >= InnerBytesSize {
+			break
+		}
+		res[i] = uints.NewU8(b)
+	}
+	for i := len(data); i < InnerBytesSize; i++ {
+		res[i] = uints.NewU8(0)
 	}
 	return res
 }

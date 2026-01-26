@@ -1,4 +1,4 @@
-package relayer
+package eth2
 
 import (
 	"crypto/sha256"
@@ -18,23 +18,22 @@ import (
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bls12381"
 	"github.com/consensys/gnark/std/math/uints"
 	"github.com/kysee/zk-chains/circuits"
-	cfgtypes "github.com/kysee/zk-chains/provers/types"
 	"github.com/kysee/zk-chains/types"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
 )
 
 // Main entry point for the relayer
-func RelayerMain(config *cfgtypes.Config) {
+func RelayerMain(config *Config) {
 	// Create and run relayer
 	relayer, err := NewRelayer(config, NewAPIFetcher(config.RPCEndpoint))
 	if err != nil {
 		log.Fatalf("Failed to create relayer: %v", err)
 	}
 
-	// Setup circuit first
+	// Setup circuits first
 	if err := relayer.setupCircuit(); err != nil {
-		log.Fatalf("failed to setup circuit: %w", err)
+		log.Fatalf("failed to setup circuits: %w", err)
 	}
 
 	if err := relayer.Run(); err != nil {
@@ -44,8 +43,8 @@ func RelayerMain(config *cfgtypes.Config) {
 
 // Relayer is the main relayer struct
 type Relayer struct {
-	config           *cfgtypes.Config
-	fetcher          cfgtypes.Fetcher
+	config           *Config
+	fetcher          Eth2Fetcher
 	ccs              constraint.ConstraintSystem
 	pk               groth16.ProvingKey
 	scPubKeysHash    []byte
@@ -53,7 +52,7 @@ type Relayer struct {
 }
 
 // NewRelayer creates a new Relayer with the given configuration
-func NewRelayer(config *cfgtypes.Config, fetcher cfgtypes.Fetcher) (*Relayer, error) {
+func NewRelayer(config *Config, fetcher Eth2Fetcher) (*Relayer, error) {
 	_ = os.MkdirAll(config.RootDir, 0755)
 
 	return &Relayer{
@@ -154,7 +153,7 @@ func (r *Relayer) Run() error {
 	}
 }
 
-// setupCircuit loads the compiled circuit and proving key from output directory
+// setupCircuit loads the compiled circuits and proving key from output directory
 func (r *Relayer) setupCircuit() error {
 	if r.ccs != nil {
 		log.Println("Circuit already loaded")
@@ -164,7 +163,7 @@ func (r *Relayer) setupCircuit() error {
 	ccsPath := filepath.Join(r.config.RootDir, "../.build/Eth2ScUpdateCircuit.ccs")
 	pkPath := filepath.Join(r.config.RootDir, "../.build/Eth2ScUpdateCircuit.pk")
 
-	// Load compiled circuit
+	// Load compiled circuits
 	log.Println("Loading Eth2ScUpdateCircuit...")
 	fCcs, err := os.Open(ccsPath)
 	if err != nil {
@@ -214,7 +213,7 @@ func (r *Relayer) generateProof(update *types.LightClientUpdate) ([]byte, error)
 	}
 
 	// Create witness
-	witness := &circuit.Eth2ScUpdateCircuit{}
+	witness := &circuits.Eth2ScUpdateCircuit{}
 
 	// Assign BeaconBlockHeader fields
 	witness.Slot = uint64(update.Data.AttestedHeader.Beacon.Slot)
@@ -280,7 +279,7 @@ func (r *Relayer) generateProof(update *types.LightClientUpdate) ([]byte, error)
 // next_sync_committee_branch to the witness
 func assignNextSyncCommitteeToWitness(
 	update *types.LightClientUpdate,
-	witness *circuit.Eth2ScUpdateCircuit,
+	witness *circuits.Eth2ScUpdateCircuit,
 ) {
 	// Compute next_sync_committee root
 	nextSCRoot := update.Data.NextSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())

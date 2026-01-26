@@ -38,10 +38,10 @@ func SetupCircuit() (constraint.ConstraintSystem, groth16.ProvingKey, groth16.Ve
 	vkPath := filepath.Join(rootDir, ".build/Eth2ScUpdateCircuit.vk")
 
 	//
-	// Step 1: Compile circuit and save to file
-	println("🕧 Compile Eth2ScUpdateCircuit circuit...")
+	// Step 1: Compile circuits and save to file
+	println("🕧 Compile Eth2ScUpdateCircuit circuits...")
 	// Compile with BN254 scalar field (for emulated BLS12-381)
-	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit.Eth2ScUpdateCircuit{})
+	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuits.Eth2ScUpdateCircuit{})
 	if err != nil {
 		return nil, nil, nil, err
 	}

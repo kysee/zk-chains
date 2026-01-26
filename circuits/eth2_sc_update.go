@@ -1,4 +1,4 @@
-package circuit
+package circuits
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ var DOMAIN = [32]uint8{
 
 // Eth2ScUpdateCircuit verifies Ethereum beacon chain sync committee BLS signatures
 //
-// This circuit performs the complete verification flow:
+// This circuits performs the complete verification flow:
 // 1. Computes blockRoot from BeaconBlockHeader fields
 // 2. Computes signingRoot = hash(blockRoot, domain)
 // 3. Computes signingRootG2 = hash-to-curve(signingRoot) IN-CIRCUIT
@@ -40,7 +40,7 @@ var DOMAIN = [32]uint8{
 // 6. Verifies BLS signature: e(aggregatedPubKey, H(signingRoot)) == e(G1, signature)
 // 7. Verifies next_sync_committee is included in StateRoot via SSZ Merkle proof
 //
-// NOTE: For complete verification of next_sync_committee, the following checks must be performed OUTSIDE the circuit:
+// NOTE: For complete verification of next_sync_committee, the following checks must be performed OUTSIDE the circuits:
 // - Slot(Period) validation
 // - Verification that the number of validators who signed the AggregatedSig exceeds 2/3 of the total
 type Eth2ScUpdateCircuit struct {
@@ -59,12 +59,12 @@ type Eth2ScUpdateCircuit struct {
 	// Next sync committee Merkle proof data
 	NextScBranch [6][32]uints.U8 // Merkle branch proving inclusion in StateRoot
 
-	// Public inputs - verified by the circuit
+	// Public inputs - verified by the circuits
 	ScPubKeysHash [32]uints.U8 `gnark:",public"` // SHA2 hash to sync committee pubkeys
 	NextScRoot    [32]uints.U8 `gnark:",public"` // SSZ root of next_sync_committee
 }
 
-// Define implements the circuit constraints
+// Define implements the circuits constraints
 func (c *Eth2ScUpdateCircuit) Define(api frontend.API) error {
 	// Step 1: Verify sync committee pubkeys hash using SHA2
 	err := c.verifyScPubKeysHash(api)
@@ -267,7 +267,7 @@ func (c *Eth2ScUpdateCircuit) hashToFieldBLS12381Fp2(
 // expandMessageXMD_SHA256 implements expand_message_xmd(msg, DST, len_in_bytes)
 // from RFC 9380, with H = SHA-256 (B = 32, r_in_bytes = 64).
 //
-// All inputs/outputs are uints.U8 in-circuit.
+// All inputs/outputs are uints.U8 in-circuits.
 func expandMessageXMD_SHA256(
 	api frontend.API,
 	msg []uints.U8,

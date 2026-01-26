@@ -1,4 +1,4 @@
-package relayer
+package eth2
 
 import (
 	"encoding/json"
@@ -8,11 +8,10 @@ import (
 	"net/url"
 	"strconv"
 
-	types2 "github.com/kysee/zk-chains/provers/types"
 	"github.com/kysee/zk-chains/types"
 )
 
-// APIFetcher implements Fetcher by calling Beacon API REST endpoint
+// APIFetcher implements Eth2Fetcher by calling Beacon API REST endpoint
 type APIFetcher struct {
 	BaseURL string
 	Client  *http.Client
@@ -65,7 +64,7 @@ func (a *APIFetcher) FetchUpdateWithParams(startPeriod uint64, count int) (*type
 	}
 
 	// Parse API response
-	var apiResponse types2.ScUpdateAPIResponse
+	var apiResponse ScUpdateAPIResponse
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -80,7 +79,7 @@ func (a *APIFetcher) FetchUpdateWithParams(startPeriod uint64, count int) (*type
 
 // FetchBlock retrieves a beacon block by slot
 // GET /eth/v2/beacon/blocks/{slot}
-func (a *APIFetcher) Block(slot uint64) (*types2.BlockAPIResponse, error) {
+func (a *APIFetcher) Block(slot uint64) (*BlockAPIResponse, error) {
 	// Build URL with slot parameter
 	endpoint, err := url.Parse(a.BaseURL)
 	if err != nil {
@@ -108,7 +107,7 @@ func (a *APIFetcher) Block(slot uint64) (*types2.BlockAPIResponse, error) {
 	}
 
 	// Parse API response
-	var blockResponse types2.BlockAPIResponse
+	var blockResponse BlockAPIResponse
 	if err := json.Unmarshal(body, &blockResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}

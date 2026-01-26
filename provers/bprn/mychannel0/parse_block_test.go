@@ -24,6 +24,7 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/fab/events/deliverclient/seek"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"github.com/kysee/zk-chains/provers/bprn"
+	"github.com/kysee/zk-chains/provers/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +32,7 @@ func TestParseBlock(t *testing.T) {
 	client, err := bprn.NewFabricClient("./connection-profile.json")
 	require.NoError(t, err)
 
-	block, err := client.GetBlockByNumber("mychannel0", "User1", "peerOrg1", 1619)
+	block, err := client.GetBlockByNumber("mychannel0", "User1", "peerOrg1", 1621)
 	require.NoError(t, err)
 
 	fmt.Printf("Block Number: %d\n", block.Header.Number)
@@ -316,16 +317,14 @@ func TestGetTx(t *testing.T) {
 
 				// Decode ECDSA signature (DER format) to get R, S values
 				r, s, err := decodeECDSASignature(endorsement.Signature)
-				if err != nil {
-					fmt.Printf("      Failed to decode signature: %v\n", err)
-				} else {
-					fmt.Printf("      R: %s\n", r.Text(16))
-					fmt.Printf("      S: %s\n", s.Text(16))
+				require.NoError(t, err)
+				fmt.Printf("      R: %s\n", r.Text(16))
+				fmt.Printf("      S: %s\n", s.Text(16))
 
-					pubKey := getPubkeyFromCert(endorsement.Endorser)
-					msgh := sha256.Sum256(append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...))
-					require.True(t, ecdsa.Verify(pubKey, msgh[:], r, s))
-				}
+				pubKey, err := types.PubkeyFromCert(endorsement.Endorser)
+				require.NoError(t, err)
+				msgh := sha256.Sum256(append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...))
+				require.True(t, ecdsa.Verify(pubKey, msgh[:], r, s))
 			}
 		}
 	}
@@ -382,6 +381,7 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 	//printJson("envelop.payload.data(transaction)", transaction)
 
 	// Parse each transaction action
+	// Actions length should be 1 for endorsement transaction
 	for _, action := range transaction.Actions {
 		actionHeader := &common.SignatureHeader{}
 		err = proto.Unmarshal(action.Header, actionHeader)
@@ -463,9 +463,9 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 							fmt.Printf("\t\t\tWrites: %d\n", len(kvRwSet.Writes))
 							for _, write := range kvRwSet.Writes {
 								valueStr := string(write.Value)
-								if len(valueStr) > 100 {
-									valueStr = valueStr[:100] + "..."
-								}
+								//if len(valueStr) > 100 {
+								//	valueStr = valueStr[:100] + "..."
+								//}
 								fmt.Printf("\t\t\t\tKey: %s, IsDelete: %v, Value: %s\n",
 									write.Key, write.IsDelete, valueStr)
 							}
@@ -532,28 +532,6 @@ func getSubjectFromCert(idBytes []byte) string {
 	}
 
 	return fmt.Sprintf("[%s] %s", serializedIdentity.Mspid, cert.Subject.String())
-}
-
-func getPubkeyFromCert(idBytes []byte) *ecdsa.PublicKey {
-	// Creator is a SerializedIdentity protobuf, not raw PEM
-	serializedIdentity := &msp.SerializedIdentity{}
-	err := proto.Unmarshal(idBytes, serializedIdentity)
-	if err != nil {
-		return nil
-	}
-
-	// IdBytes contains the actual PEM certificate
-	block, _ := pem.Decode(serializedIdentity.IdBytes)
-	if block == nil {
-		return nil
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil
-	}
-
-	return cert.PublicKey.(*ecdsa.PublicKey)
 }
 
 // ECDSASignature represents an ECDSA signature in ASN.1 DER format

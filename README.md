@@ -11,7 +11,7 @@ go run setup.go
 To generate `data/proof-data.json`,
 
 ```bash
-cd circuit
+cd circuits
 go test -run TestEth2ScUpdateCircuit$ -timeout 20m
 cd ..
 ```

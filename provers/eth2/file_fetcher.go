@@ -1,4 +1,4 @@
-package relayer
+package eth2
 
 import (
 	"encoding/json"

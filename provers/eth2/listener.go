@@ -1,4 +1,4 @@
-package relayer
+package eth2
 
 import (
 	"bytes"
@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"log"
 
-	cfgtypes "github.com/kysee/zk-chains/provers/types"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
 )
 
-func ListenerMain(config *cfgtypes.Config) {
+func ListenerMain(config *Config) {
 	// Create and run relayer
 	relayer := NewListener(config, NewAPIFetcher(config.RPCEndpoint))
 
@@ -24,12 +23,12 @@ func ListenerMain(config *cfgtypes.Config) {
 }
 
 type Listener struct {
-	config  *cfgtypes.Config
-	fetcher cfgtypes.Fetcher
+	config  *Config
+	fetcher Eth2Fetcher
 }
 
 // NewListener creates a new Listener with the given APIFetcher
-func NewListener(config *cfgtypes.Config, fetcher cfgtypes.Fetcher) *Listener {
+func NewListener(config *Config, fetcher Eth2Fetcher) *Listener {
 	return &Listener{
 		config:  config,
 		fetcher: fetcher,

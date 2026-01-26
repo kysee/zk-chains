@@ -96,7 +96,7 @@ func AggregatePublicKeys(pubkeys []zrntcommon.BLSPubkey, bits []bool) (bls12381.
 }
 
 // ComputeScPubKeysHash computes a SHA256 commitment to the sync committee public keys
-// This matches the commitment computation in the circuit
+// This matches the commitment computation in the circuits
 //
 //	func ComputeScPubKeysHash(pubkeys []bls12381.G1Affine) [32]byte {
 //		hasher := sha256.New()
@@ -104,7 +104,7 @@ func AggregatePublicKeys(pubkeys []zrntcommon.BLSPubkey, bits []bool) (bls12381.
 //		// Hash each public key's X coordinate (48 bytes in compressed form)
 //		for i := 0; i < 512; i++ {
 //			// Serialize the G1 point to compressed form (48 bytes)
-//			// For the circuit, we only hash X coordinates
+//			// For the circuits, we only hash X coordinates
 //			pubkeyBytes := pubkeys[i].X.Bytes()
 //			hasher.Write(pubkeyBytes[:])
 //		}
@@ -117,11 +117,11 @@ func ComputeScPubKeysHash(pubkeys []bls12381.G1Affine) [32]byte {
 	hasher := sha256.New()
 
 	// Hash only the first two limbs (Limbs[0], Limbs[1]) of each X coordinate for efficiency
-	// This matches the circuit which hashes Limbs[0] and Limbs[1] in big-endian format
+	// This matches the circuits which hashes Limbs[0] and Limbs[1] in big-endian format
 	for i := 0; i < len(pubkeys); i++ {
 		// Get the X coordinate as bytes (big-endian, 48 bytes = 384 bits)
 		xBytes := pubkeys[i].X.Bytes()
-		bytesToHash := xBytes[32:] // [32..48] = 128bits. it's for X.Limbs[1] || X.Limbs[0] in the circuit
+		bytesToHash := xBytes[32:] // [32..48] = 128bits. it's for X.Limbs[1] || X.Limbs[0] in the circuits
 		hasher.Write(bytesToHash)
 		//if i < 10 {
 		//	fmt.Printf("pubkey[%d] to hash: 0x%x\n", i, bytesToHash)

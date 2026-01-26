@@ -1,4 +1,4 @@
-package types
+package eth2
 
 import (
 	"fmt"

@@ -17,9 +17,9 @@ type FabricClient struct {
 }
 
 // NewFabricClient creates a new FabricClient instance using the provided connection profile
-func NewFabricClient(configPath string) (*FabricClient, error) {
+func NewFabricClient(connProfilePath string) (*FabricClient, error) {
 	// Read and parse the config file manually to fix potential issues
-	content, err := os.ReadFile(configPath)
+	content, err := os.ReadFile(connProfilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}

@@ -1,4 +1,4 @@
-package types
+package eth2
 
 import (
 	"github.com/kysee/zk-chains/types"
@@ -16,8 +16,8 @@ type BlockAPIResponse struct {
 	Data                electra.SignedBeaconBlock `json:"data"`
 }
 
-// Fetcher defines the interface for fetching light client update data
-type Fetcher interface {
+// Eth2Fetcher defines the interface for fetching light client update data
+type Eth2Fetcher interface {
 	// FetchUpdate retrieves a light client update
 	ScUpdate(period uint64) (*types.LightClientUpdate, error)
 	Block(slot uint64) (*BlockAPIResponse, error)

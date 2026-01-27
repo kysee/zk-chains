@@ -14,6 +14,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/frontend/cs/scs"
+	"github.com/consensys/gnark/std/math/uints"
 	"github.com/consensys/gnark/test/unsafekzg"
 )
 
@@ -179,4 +180,18 @@ func LoadOrSetupCircuit_Plonk(outDir string, c frontend.Circuit) (constraint.Con
 	}
 	fmt.Println("[plonk] ✓ Setup complete")
 	return ccs, pk, vk
+}
+
+func ToU8Array32(data []byte) [32]uints.U8 {
+	var res [32]uints.U8
+	for i, b := range data {
+		if i >= 32 {
+			break
+		}
+		res[i] = uints.NewU8(b)
+	}
+	for i := len(data); i < 32; i++ {
+		res[i] = uints.NewU8(0)
+	}
+	return res
 }

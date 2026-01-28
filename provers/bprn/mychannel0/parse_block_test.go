@@ -143,7 +143,7 @@ func TestEventClient(t *testing.T) {
 			eventCount++
 			fmt.Printf("\n=== Chaincode Event #%d ===\n", eventCount)
 			fmt.Printf("  Chaincode ID: %s\n", ccEvent.ChaincodeID)
-			fmt.Printf("  Event Name:   %s\n", ccEvent.EventName)
+			fmt.Printf("  Event Type:   %s\n", ccEvent.EventName)
 			fmt.Printf("  TxID:         %s\n", ccEvent.TxID)
 			fmt.Printf("  Block Number: %d\n", ccEvent.BlockNumber)
 			fmt.Printf("  Payload:      %s\n", string(ccEvent.Payload))
@@ -303,7 +303,7 @@ func TestGetTx(t *testing.T) {
 				err = proto.Unmarshal(chaincodeAction.Events, chaincodeEvent)
 				if err == nil {
 					fmt.Printf("Event Chaincode: %s\n", chaincodeEvent.ChaincodeId)
-					fmt.Printf("Event Name: %s\n", chaincodeEvent.EventName)
+					fmt.Printf("Event Type: %s\n", chaincodeEvent.EventName)
 					fmt.Printf("Event TxId: %s\n", chaincodeEvent.TxId)
 					fmt.Printf("Event Payload: %s\n", string(chaincodeEvent.Payload))
 				}

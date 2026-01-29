@@ -1,27 +1,24 @@
 package event
 
 import (
-	"encoding/json"
-	"errors"
-
 	"github.com/wealdtech/go-merkletree/v2"
 )
 
 type EventLog struct {
-	Type  string `json:"type"`
-	Value []byte `json:"value"` // e.g. PostMessageEventLog.Marshal()
+	Type  string      `json:"type"`
+	Value IMerkleable `json:"value"` // e.g. PostMessageEventLog.Marshal()
 }
 
 func (evtlog *EventLog) Root() ([]byte, error) {
-	switch evtlog.Type {
-	case "PostMessageEventLogValue":
-		var logVal PostMessageEventLogValue
-		if err := json.Unmarshal(evtlog.Value, &logVal); err != nil {
-			return nil, err
-		}
-		return logVal.Root()
-	}
-	return nil, errors.New("unsupported event log")
+	return evtlog.Value.Root()
+}
+
+func (evtlog *EventLog) Proof(idx int) ([][]byte, error) {
+	return evtlog.Value.Proof(idx)
+}
+
+func (evtlog *EventLog) Leaves() [][]byte {
+	return evtlog.Value.Leaves()
 }
 
 type EventPayload struct {

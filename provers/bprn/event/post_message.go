@@ -1,12 +1,11 @@
 package event
 
-import (
-	"encoding/binary"
+import "encoding/binary"
 
-	"github.com/wealdtech/go-merkletree/v2"
-)
+var _ IMerkleable = (*PostMessageEventLogValue)(nil)
 
 type PostMessageEventLogValue struct {
+	*merkleableType
 	SrcChainId string `json:"srcChainId"`
 	SrcDappId  string `json:"srcDappId"`
 	SrcAcctId  string `json:"srcAcctId"`
@@ -15,41 +14,29 @@ type PostMessageEventLogValue struct {
 	DstAcctId  string `json:"dstAcctId"`
 	MsgIdx     uint64 `json:"msgIdx"`
 	MsgPayload []byte `json:"msgPayload"`
-
-	tree *merkletree.MerkleTree
 }
 
-func (p *PostMessageEventLogValue) Root() ([]byte, error) {
-	tree, err := merkletree.NewTree(
-		merkletree.WithData(p.leaves()),
-		merkletree.WithHashType(&SHA256Hasher{}),
-	)
-	if err != nil {
-		return nil, err
+func NewPostMessageEventLogValue() *PostMessageEventLogValue {
+	ret := &PostMessageEventLogValue{}
+	ret.merkleableType = newMerkleableType(ret.Leaves)
+	return ret
+}
+func NewPostMessageEventLogValueWith(srcChainId, srcDappId, srcAcctId, dstChainId, dstDappId, dstAcctId string, msgIdx uint64, msgPayload []byte) *PostMessageEventLogValue {
+	ret := &PostMessageEventLogValue{
+		SrcChainId: srcChainId,
+		SrcDappId:  srcDappId,
+		SrcAcctId:  srcAcctId,
+		DstChainId: dstChainId,
+		DstDappId:  dstDappId,
+		DstAcctId:  dstAcctId,
+		MsgIdx:     msgIdx,
+		MsgPayload: msgPayload,
 	}
-
-	p.tree = tree
-
-	size := len(tree.Root())
-	result := make([]byte, size)
-	copy(result, tree.Root())
-	return result, nil
+	ret.merkleableType = newMerkleableType(ret.Leaves)
+	return ret
 }
 
-func (p *PostMessageEventLogValue) Proof(idx int) ([][]byte, error) {
-	if p.tree == nil {
-		_, _ = p.Root()
-	}
-
-	proof, err := p.tree.GenerateProofWithIndex(uint64(idx), 0)
-	if err != nil {
-		return nil, err
-	}
-
-	return proof.Hashes, nil
-}
-
-func (p *PostMessageEventLogValue) leaves() [][]byte {
+func (p *PostMessageEventLogValue) Leaves() [][]byte {
 	msgIdxBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(msgIdxBytes, p.MsgIdx)
 

@@ -2,7 +2,6 @@ package event
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -13,24 +12,20 @@ var evtPayload EventPayload
 
 func init() {
 	for i := 0; i < 11; i++ {
-		evtValue := &PostMessageEventLogValue{
-			SrcChainId: fmt.Sprintf("srcChainId-%d", i),
-			SrcDappId:  fmt.Sprintf("srcDappId-%d", i),
-			SrcAcctId:  fmt.Sprintf("srcAcctId-%d", i),
-			DstChainId: fmt.Sprintf("dstChainId-%d", i),
-			DstDappId:  fmt.Sprintf("dstDappId-%d", i),
-			DstAcctId:  fmt.Sprintf("dstAcctId-%d", i),
-			MsgIdx:     uint64(i * 100),
-			MsgPayload: []byte(fmt.Sprintf("hello world-%d", i)),
-		}
+		evtValue := NewPostMessageEventLogValueWith(
+			fmt.Sprintf("srcChainId-%d", i),
+			fmt.Sprintf("srcDappId-%d", i),
+			fmt.Sprintf("srcAcctId-%d", i),
+			fmt.Sprintf("dstChainId-%d", i),
+			fmt.Sprintf("dstDappId-%d", i),
+			fmt.Sprintf("dstAcctId-%d", i),
+			uint64(i*100),
+			[]byte(fmt.Sprintf("hello world-%d", i)),
+		)
 
-		jz, err := json.Marshal(evtValue)
-		if err != nil {
-			panic(err)
-		}
 		evtPayload.Logs = append(evtPayload.Logs, &EventLog{
 			Type:  "PostMessageEventLogValue",
-			Value: jz,
+			Value: evtValue,
 		})
 	}
 }
@@ -41,11 +36,8 @@ func TestMerkle_PoostMessageEventLogValue(t *testing.T) {
 	fmt.Printf("evtPayloadRoot: %x\n", evtPayloadRoot)
 
 	for i, evtLog := range evtPayload.Logs {
-		evtLogValue := &PostMessageEventLogValue{}
-		require.NoError(t, json.Unmarshal(evtLog.Value, evtLogValue))
-
 		logProofHashes, err := evtPayload.Proof(i)
-		logRoot, err := evtLogValue.Root()
+		logRoot, err := evtLog.Root()
 		require.NoError(t, err)
 		fmt.Println("======================================================")
 		fmt.Printf("EventLog[%d].Value root: %x\n", i, logRoot)
@@ -54,11 +46,11 @@ func TestMerkle_PoostMessageEventLogValue(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ret)
 
-		leaves := evtLogValue.leaves()
+		leaves := evtLog.Leaves()
 
 		for idx, leaf := range leaves {
 
-			proofHashes, err := evtLogValue.Proof(idx)
+			proofHashes, err := evtLog.Proof(idx)
 			require.NoError(t, err)
 
 			fmt.Println("---")
@@ -67,7 +59,7 @@ func TestMerkle_PoostMessageEventLogValue(t *testing.T) {
 				fmt.Printf("proofHashes[%d]: %x\n", i, proofHash)
 			}
 
-			ret, err := Verify(idx, evtLogValue.leaves()[idx], proofHashes, logRoot)
+			ret, err := Verify(idx, evtLog.Leaves()[idx], proofHashes, logRoot)
 			require.NoError(t, err)
 			require.True(t, ret)
 		}

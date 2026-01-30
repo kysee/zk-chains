@@ -32,7 +32,7 @@ func TestBPrNMsgHCircuit_P256(t *testing.T) {
 	preMsgH := sha256.Sum256([]byte("premessage_message"))
 	msgH := sha256.Sum256([]byte("public_message"))
 
-	// Concatenate PreH and MsgH
+	// Concatenate OriginPayloadH and EventPayloadH
 	data := append(preMsgH[:], msgH[:]...)
 
 	// Hash the concatenated data
@@ -51,12 +51,12 @@ func TestBPrNMsgHCircuit_P256(t *testing.T) {
 	require.True(t, valid, "signature should be valid")
 
 	// Create circuit
-	var circuit BPrNMsgHCircuit
+	var circuit BPrNEventProofCircuit
 
 	// Create witness
-	witness := BPrNMsgHCircuit{
-		PreH: ToU8Array32(preMsgH[:]),
-		MsgH: ToU8Array32(msgH[:]),
+	witness := BPrNEventProofCircuit{
+		OriginPayloadH: ToU8Array32(preMsgH[:]),
+		EventPayloadH:  ToU8Array32(msgH[:]),
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
@@ -73,8 +73,8 @@ func TestBPrNMsgHCircuit_P256(t *testing.T) {
 	assert.NoError(err)
 
 	t.Logf("P256 ECDSA signature verification circuit test passed")
-	t.Logf("PreH: %x", preMsgH)
-	t.Logf("MsgH: %x", msgH)
+	t.Logf("OriginPayloadH: %x", preMsgH)
+	t.Logf("EventPayloadH: %x", msgH)
 	t.Logf("Hash: %x", hash)
 }
 
@@ -88,7 +88,7 @@ func TestBPrNMsgHCircuit_WrongMsgH(t *testing.T) {
 	msgH := sha256.Sum256([]byte("public_message"))
 	wrongMsgH := sha256.Sum256([]byte("wrong_message"))
 
-	// Concatenate PreH and MsgH (correct data for signature)
+	// Concatenate OriginPayloadH and EventPayloadH (correct data for signature)
 	data := append(preMsgH[:], msgH[:]...)
 
 	// Hash the concatenated data
@@ -101,12 +101,12 @@ func TestBPrNMsgHCircuit_WrongMsgH(t *testing.T) {
 	r, s, err := proverTypes.ParseDERSignature(sigDER)
 	require.NoError(t, err)
 
-	var circuit BPrNMsgHCircuit
+	var circuit BPrNEventProofCircuit
 
-	// Create witness with Wrong MsgH
-	witness := BPrNMsgHCircuit{
-		PreH: ToU8Array32(preMsgH[:]),
-		MsgH: ToU8Array32(wrongMsgH[:]), // Wrong!
+	// Create witness with Wrong EventPayloadH
+	witness := BPrNEventProofCircuit{
+		OriginPayloadH: ToU8Array32(preMsgH[:]),
+		EventPayloadH:  ToU8Array32(wrongMsgH[:]), // Wrong!
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
@@ -120,9 +120,9 @@ func TestBPrNMsgHCircuit_WrongMsgH(t *testing.T) {
 	// Test that the circuit FAILS
 	assert := test.NewAssert(t)
 	err = test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
-	assert.Error(err, "circuit should fail when MsgH is wrong")
+	assert.Error(err, "circuit should fail when EventPayloadH is wrong")
 
-	t.Logf("Wrong MsgH - correctly rejected")
+	t.Logf("Wrong EventPayloadH - correctly rejected")
 }
 
 func TestBPrNMsgHCircuit_InvalidSignature(t *testing.T) {
@@ -134,7 +134,7 @@ func TestBPrNMsgHCircuit_InvalidSignature(t *testing.T) {
 	preMsgH := sha256.Sum256([]byte("premessage_message"))
 	msgH := sha256.Sum256([]byte("public_message"))
 
-	// Concatenate PreH and MsgH
+	// Concatenate OriginPayloadH and EventPayloadH
 	data := append(preMsgH[:], msgH[:]...)
 
 	// Hash the concatenated data
@@ -150,12 +150,12 @@ func TestBPrNMsgHCircuit_InvalidSignature(t *testing.T) {
 	// Modify S to make signature invalid
 	invalidS := new(big.Int).Add(s, big.NewInt(1))
 
-	var circuit BPrNMsgHCircuit
+	var circuit BPrNEventProofCircuit
 
 	// Create witness with invalid signature
-	witness := BPrNMsgHCircuit{
-		PreH: ToU8Array32(preMsgH[:]),
-		MsgH: ToU8Array32(msgH[:]),
+	witness := BPrNEventProofCircuit{
+		OriginPayloadH: ToU8Array32(preMsgH[:]),
+		EventPayloadH:  ToU8Array32(msgH[:]),
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
@@ -176,12 +176,12 @@ func TestBPrNMsgHCircuit_InvalidSignature(t *testing.T) {
 
 func TestBPrNMsgHCircuit_Setup_Groth16(t *testing.T) {
 	rootDir, _ := types2.ProjectRoot()
-	var c BPrNMsgHCircuit
+	var c BPrNEventProofCircuit
 	_, _, _ = LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &c)
 }
 
 func TestBPrNMsgHCircuit_Setup_Plonk(t *testing.T) {
-	var c BPrNMsgHCircuit
+	var c BPrNEventProofCircuit
 
 	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), scs.NewBuilder, &c)
 	require.NoError(t, err)

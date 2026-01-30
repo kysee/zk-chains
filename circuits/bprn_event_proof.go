@@ -12,8 +12,8 @@ import (
 // Circuit size constants
 const ()
 
-// BPrNMsgHCircuit verifies P256 ECDSA signature on PreH + MsgH
-type BPrNMsgHCircuit struct {
+// BPrNEventProofCircuit verifies P256 ECDSA signature on OriginPayloadH + EventPayloadH
+type BPrNEventProofCircuit struct {
 	// Secret inputs
 
 	// P256 Public Key (X, Y coordinates)
@@ -22,13 +22,16 @@ type BPrNMsgHCircuit struct {
 	// P256 Signature (R, S values)
 	Sig gnark_ecdsa.Signature[emulated.P256Fr]
 
-	PreH [32]uints.U8
+	OriginPayloadH [32]uints.U8
+	EventPayloadH  [32]uints.U8
+
+	EventLogRoot [32]uints.U8
 
 	// Public input
-	MsgH [32]uints.U8 `gnark:",public"` // Data proven to be in transaction
+	EventElemH [32]uints.U8 `gnark:",public"`
 }
 
-func (c *BPrNMsgHCircuit) Define(api frontend.API) error {
+func (c *BPrNEventProofCircuit) Define(api frontend.API) error {
 
 	// Create a new SHA256 hasher
 	hasher, err := sha2.New(api)
@@ -37,8 +40,8 @@ func (c *BPrNMsgHCircuit) Define(api frontend.API) error {
 	}
 
 	// Write 64 bytes total (left || right)
-	hasher.Write(c.PreH[:])
-	hasher.Write(c.MsgH[:])
+	hasher.Write(c.OriginPayloadH[:])
+	hasher.Write(c.EventPayloadH[:])
 
 	// Compute SHA256 hash
 	computedHash := hasher.Sum()

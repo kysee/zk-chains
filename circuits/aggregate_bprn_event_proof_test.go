@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -23,11 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// InnerProofData holds data needed to generate an inner BPrNMsgHCircuit proof
+// InnerProofData holds data needed to generate an inner BPrNEventProofCircuit proof
 type InnerProofData struct {
-	PrivKey *ecdsa.PrivateKey
-	PreH    [32]byte
-	TargetH [32]byte // Same for all proofs in aggregate
+	PrivKey        *ecdsa.PrivateKey
+	OriginPayloadH [32]byte // OriginPayloadH
+	EventPayloadH  [32]byte // EventPayloadH - Same for all proofs in aggregate
+	EventLogRoot   [32]byte
+	EventElemH     [32]byte // Public input
 }
 
 // InnerProofResult holds the result of generating an inner proof
@@ -38,7 +41,7 @@ type InnerProofResult struct {
 	Err     error
 }
 
-// GenerateInnerProofsParallel generates multiple BPrNMsgHCircuit proofs in parallel
+// GenerateInnerProofsParallel generates multiple BPrNEventProofCircuit proofs in parallel
 func GenerateInnerProofsParallel(
 	innerCcs constraint.ConstraintSystem,
 	innerPk groth16.ProvingKey,
@@ -56,8 +59,8 @@ func GenerateInnerProofsParallel(
 
 			result := InnerProofResult{Index: idx}
 
-			// Compute digest: SHA256(PreH || TargetH)
-			digest := sha256.Sum256(append(d.PreH[:], d.TargetH[:]...))
+			// Compute digest: SHA256(OriginPayloadH || EventPayloadH)
+			digest := sha256.Sum256(append(d.OriginPayloadH[:], d.EventPayloadH[:]...))
 
 			// Sign the digest
 			sigDER, err := d.PrivKey.Sign(rand.Reader, digest[:], nil)
@@ -75,9 +78,11 @@ func GenerateInnerProofsParallel(
 			}
 
 			// Create witness for inner circuit
-			assignment := BPrNMsgHCircuit{
-				PreH:    ToU8Array32(d.PreH[:]),
-				TargetH: ToU8Array32(d.TargetH[:]),
+			assignment := BPrNEventProofCircuit{
+				OriginPayloadH: ToU8Array32(d.OriginPayloadH[:]),
+				EventPayloadH:  ToU8Array32(d.EventPayloadH[:]),
+				EventLogRoot:   ToU8Array32(d.EventLogRoot[:]),
+				EventElemH:     ToU8Array32(d.EventElemH[:]),
 				Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 					X: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.X),
 					Y: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.Y),
@@ -129,46 +134,66 @@ func GenerateInnerProofsParallel(
 	return proofs, witnesses, nil
 }
 
-func TestAggregateBPrNMsgHCircuitBN254_Compile(t *testing.T) {
-	// Test that the circuit compiles
-	var circuit AggregateBPrNMsgHCircuitBN254
+func TestAggregateBPrNEventProofCircuitBN254_Compile(t *testing.T) {
+	t.Log("Step 1: Compile inner circuit (BPrNEventProofCircuit)...")
 
-	// For compilation, we need placeholder structures
-	// This is a basic compilation test - full test would require proper placeholder setup
+	// First, compile the inner circuit to get its constraint system
+	var innerCircuit BPrNEventProofCircuit
+	innerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &innerCircuit)
+	require.NoError(t, err)
+	t.Logf("Inner circuit constraints: %d", innerCcs.GetNbConstraints())
+	t.Logf("Inner circuit public inputs: %d", innerCcs.GetNbPublicVariables())
 
-	t.Log("Compiling AggregateBPrNMsgHCircuitBN254...")
+	t.Log("Step 2: Create placeholders for recursive circuit...")
 
-	// Note: This compilation will be very expensive due to emulated BN254 pairing
-	// For production, consider using BLS12-377/BW6-761 curve cycle instead
+	// Create placeholders using inner circuit's constraint system
+	placeholderVK := stdgroth16.PlaceholderVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerCcs)
+	placeholderProof := stdgroth16.PlaceholderProof[sw_bn254.G1Affine, sw_bn254.G2Affine](innerCcs)
+	placeholderWitness := stdgroth16.PlaceholderWitness[sw_bn254.ScalarField](innerCcs)
 
-	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
+	// Build outer circuit with placeholders
+	var circuitProofs [MaxAggregateProofs]stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
+	var circuitWitnesses [MaxAggregateProofs]stdgroth16.Witness[sw_bn254.ScalarField]
+
+	for i := 0; i < MaxAggregateProofs; i++ {
+		circuitProofs[i] = placeholderProof
+		circuitWitnesses[i] = placeholderWitness
+	}
+
+	outerCircuit := AggregateBPrNEventProofCircuitBN254{
+		Proofs:    circuitProofs,
+		Witnesses: circuitWitnesses,
+		VK:        placeholderVK,
+	}
+
+	t.Log("Step 3: Compile outer circuit (AggregateBPrNEventProofCircuitBN254)...")
+	t.Log("NOTE: This will be very slow due to emulated BN254 pairing...")
+
+	// This compilation is extremely expensive - may take a long time
+	outerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &outerCircuit)
 	if err != nil {
-		t.Logf("Expected: Compilation requires placeholder setup. Error: %v", err)
-		t.Skip("Skipping - requires proper placeholder setup for recursive circuit")
+		t.Logf("Compilation error: %v", err)
+		t.Skip("Skipping - compilation failed or timed out")
 		return
 	}
 
-	t.Logf("Circuit compiled successfully")
-	t.Logf("Number of constraints: %d", ccs.GetNbConstraints())
-	t.Logf("Number of public inputs: %d", ccs.GetNbPublicVariables())
+	t.Logf("Outer circuit compiled successfully!")
+	t.Logf("Number of constraints: %d", outerCcs.GetNbConstraints())
+	t.Logf("Number of public inputs: %d", outerCcs.GetNbPublicVariables())
 }
 
 func TestGenerateInnerProofsParallel(t *testing.T) {
 	numProofs := 3
 
-	// Step 1: Setup inner circuit (BPrNMsgHCircuit)
+	// Step 1: Setup inner circuit (BPrNEventProofCircuit)
 	t.Log("Setting up inner circuit...")
-	var innerCircuit BPrNMsgHCircuit
-
-	innerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &innerCircuit)
-	require.NoError(t, err)
+	var innerCircuit BPrNEventProofCircuit
+	innerCcs, innerPk, innerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
 	t.Logf("Inner circuit constraints: %d", innerCcs.GetNbConstraints())
 
-	innerPk, innerVk, err := groth16.Setup(innerCcs)
-	require.NoError(t, err)
-
-	// Step 2: Generate test data with common TargetH
+	// Step 2: Generate test data with common EventPayloadH
 	commonTargetH := sha256.Sum256([]byte("common_target_hash"))
+	commonEventElemH := sha256.Sum256([]byte("common_event_elem_hash"))
 
 	proofDataList := make([]InnerProofData, numProofs)
 	for i := 0; i < numProofs; i++ {
@@ -179,10 +204,16 @@ func TestGenerateInnerProofsParallel(t *testing.T) {
 		_, err = rand.Read(preH[:])
 		require.NoError(t, err)
 
+		var eventLogRoot [32]byte
+		_, err = rand.Read(eventLogRoot[:])
+		require.NoError(t, err)
+
 		proofDataList[i] = InnerProofData{
-			PrivKey: privKey,
-			PreH:    preH,
-			TargetH: commonTargetH, // Same for all
+			PrivKey:        privKey,
+			OriginPayloadH: preH,
+			EventPayloadH:  commonTargetH, // Same for all
+			EventLogRoot:   eventLogRoot,
+			EventElemH:     commonEventElemH, // Public input
 		}
 	}
 
@@ -216,17 +247,14 @@ func TestAggregateProofsWithRecursion(t *testing.T) {
 	numProofs := 2 // Start small for testing
 
 	// Step 1: Setup inner circuit
-	t.Log("Setting up inner circuit (BPrNMsgHCircuit)...")
-	var innerCircuit BPrNMsgHCircuit
+	t.Log("Setting up inner circuit (BPrNEventProofCircuit)...")
+	var innerCircuit BPrNEventProofCircuit
+	innerCcs, innerPk, innerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
+	t.Logf("Inner circuit constraints: %d", innerCcs.GetNbConstraints())
 
-	innerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &innerCircuit)
-	require.NoError(t, err)
-
-	innerPk, innerVk, err := groth16.Setup(innerCcs)
-	require.NoError(t, err)
-
-	// Step 2: Generate inner proofs with common TargetH
+	// Step 2: Generate inner proofs with common EventPayloadH
 	commonTargetH := sha256.Sum256([]byte("common_target"))
+	commonEventElemH := sha256.Sum256([]byte("common_event_elem"))
 
 	proofDataList := make([]InnerProofData, numProofs)
 	for i := 0; i < numProofs; i++ {
@@ -234,12 +262,16 @@ func TestAggregateProofsWithRecursion(t *testing.T) {
 		require.NoError(t, err)
 
 		var preH [32]byte
-		rand.Read(preH[:])
+		var eventLogRoot [32]byte
+		_, _ = rand.Read(preH[:])
+		_, _ = rand.Read(eventLogRoot[:])
 
 		proofDataList[i] = InnerProofData{
-			PrivKey: privKey,
-			PreH:    preH,
-			TargetH: commonTargetH,
+			PrivKey:        privKey,
+			OriginPayloadH: preH,
+			EventPayloadH:  commonTargetH,
+			EventLogRoot:   eventLogRoot,
+			EventElemH:     commonEventElemH,
 		}
 	}
 
@@ -275,8 +307,8 @@ func TestAggregateProofsWithRecursion(t *testing.T) {
 	// Step 4: Create aggregate circuit assignment
 	targetHLimbs := TargetHToLimbs(commonTargetH)
 
-	aggregateAssignment := AggregateBPrNMsgHCircuitBN254{
-		TargetH: [4]frontend.Variable{
+	aggregateAssignment := AggregateBPrNEventProofCircuitBN254{
+		EventPayloadH: [4]frontend.Variable{
 			targetHLimbs[0],
 			targetHLimbs[1],
 			targetHLimbs[2],

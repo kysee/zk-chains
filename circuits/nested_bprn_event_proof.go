@@ -12,7 +12,7 @@ import (
 // MaxNestedProofs is the maximum number of signatures to verify in a single circuit
 const MaxNestedProofs = 8
 
-// NestedBPrNMsgHCircuit verifies multiple P256 ECDSA signatures on PreH + TargetH
+// NestedBPrNMsgHCircuit verifies multiple P256 ECDSA signatures on OriginPayloadH + TargetH
 // All signatures must use the same TargetH (public input)
 //
 // This is a "nested circuit" approach where inner circuit logic is directly
@@ -68,7 +68,7 @@ func (c *NestedBPrNMsgHCircuit) verifySignature(api frontend.API, idx int, isAct
 		return err
 	}
 
-	// Write 64 bytes total (PreH || TargetH)
+	// Write 64 bytes total (OriginPayloadH || EventPayloadH)
 	hasher.Write(c.PreHs[idx][:])
 	hasher.Write(c.TargetH[:])
 
@@ -193,7 +193,7 @@ func verifySingleSignature(
 		return err
 	}
 
-	// Hash PreH || TargetH
+	// Hash OriginPayloadH || EventPayloadH
 	hasher.Write(preH[:])
 	hasher.Write(targetH[:])
 	computedHash := hasher.Sum()

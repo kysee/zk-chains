@@ -13,14 +13,14 @@ import (
 // MaxAggregateProofs is the maximum number of inner BPrNMsgHCircuit proofs to aggregate
 const MaxAggregateProofs = 8
 
-// AggregateBPrNMsgHCircuit aggregates multiple BPrNMsgHCircuit proofs
+// AggregateBPrNEventProofCircuit aggregates multiple BPrNMsgHCircuit proofs
 // All inner proofs must share the same TargetH (verified via public inputs)
 //
 // IMPORTANT: Inner circuit (BPrNMsgHCircuit) must be compiled with BLS12-377 curve
 // This outer circuit should be compiled with BW6-761 curve for efficient native pairing verification
 //
 // Curve cycle: BLS12-377 (inner) -> BW6-761 (outer)
-type AggregateBPrNMsgHCircuit struct {
+type AggregateBPrNEventProofCircuit struct {
 	// Public: common TargetH that all inner proofs share (32 bytes as 4 x 64-bit limbs)
 	// Using 4 limbs because BW6-761 scalar field is large enough
 	TargetH [4]frontend.Variable `gnark:",public"`
@@ -39,14 +39,14 @@ type AggregateBPrNMsgHCircuit struct {
 	VK stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]
 }
 
-func (c *AggregateBPrNMsgHCircuit) Define(api frontend.API) error {
+func (c *AggregateBPrNEventProofCircuit) Define(api frontend.API) error {
 	// Create verifier for BLS12-377 Groth16 proofs (native on BW6-761)
 	verifier, err := stdgroth16.NewVerifier[sw_bls12377.ScalarField, sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT](api)
 	if err != nil {
 		return err
 	}
 
-	// Verify each inner proof and check TargetH consistency
+	// Verify each inner proof and check EventPayloadH consistency
 	for i := 0; i < MaxAggregateProofs; i++ {
 		// Determine if this slot is active (i < NumProofs)
 		// isActive = 1 if NumProofs > i, 0 otherwise
@@ -60,14 +60,14 @@ func (c *AggregateBPrNMsgHCircuit) Define(api frontend.API) error {
 			return err
 		}
 
-		// Extract TargetH from inner witness public inputs
-		// BPrNMsgHCircuit has TargetH [32]uints.U8 as public input
+		// Extract EventPayloadH from inner witness public inputs
+		// BPrNMsgHCircuit has EventPayloadH [32]uints.U8 as public input
 		// Witness.Public contains these 32 emulated elements
 
 		// Reconstruct 4 x 64-bit limbs from 32 x 8-bit values
 		innerTargetH := reconstructTargetHFromWitness(api, c.Witnesses[i].Public)
 
-		// Check TargetH matches (only for active slots)
+		// Check EventPayloadH matches (only for active slots)
 		for j := 0; j < 4; j++ {
 			diff := api.Sub(c.TargetH[j], innerTargetH[j])
 			// For active slots: diff must be 0
@@ -83,7 +83,7 @@ func (c *AggregateBPrNMsgHCircuit) Define(api frontend.API) error {
 func reconstructTargetHFromWitness(api frontend.API, publicInputs []emulated.Element[sw_bls12377.ScalarField]) [4]frontend.Variable {
 	var result [4]frontend.Variable
 
-	// publicInputs[0..31] are the 32 bytes of TargetH
+	// publicInputs[0..31] are the 32 bytes of EventPayloadH
 	// Group into 4 limbs of 8 bytes each (64 bits)
 	// Limb 0: bytes 0-7 (most significant)
 	// Limb 1: bytes 8-15
@@ -111,17 +111,17 @@ func reconstructTargetHFromWitness(api frontend.API, publicInputs []emulated.Ele
 // ============================================================================
 // BN254 Emulated Version - For Ethereum verification
 // ============================================================================
-// AggregateBPrNMsgHCircuitBN254 aggregates multiple BPrNMsgHCircuit proofs
+// AggregateBPrNEventProofCircuitBN254 aggregates multiple BPrNMsgHCircuit proofs
 // using emulated BN254 arithmetic. This allows the outer circuit to be compiled
 // with BN254 curve for Ethereum smart contract verification.
 //
 // NOTE: This is computationally expensive due to emulated pairing operations.
-// Use AggregateBPrNMsgHCircuit (BLS12-377/BW6-761) for off-chain verification.
+// Use AggregateBPrNEventProofCircuit (BLS12-377/BW6-761) for off-chain verification.
 //
 // Curve: BN254 (inner, emulated) -> BN254 (outer)
-type AggregateBPrNMsgHCircuitBN254 struct {
-	// Public: common TargetH that all inner proofs share (32 bytes as 4 x 64-bit limbs)
-	TargetH [4]frontend.Variable `gnark:",public"`
+type AggregateBPrNEventProofCircuitBN254 struct {
+	// Public: common EventPayloadH that all inner proofs share (32 bytes as 4 x 64-bit limbs)
+	EventPayloadH [4]frontend.Variable `gnark:",public"`
 
 	// Number of actual proofs to verify (must be <= MaxAggregateProofs)
 	NumProofs frontend.Variable `gnark:",public"`
@@ -130,21 +130,21 @@ type AggregateBPrNMsgHCircuitBN254 struct {
 	Proofs [MaxAggregateProofs]stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
 
 	// Inner witnesses (public inputs for each inner proof)
-	// Each witness contains TargetH [32]U8 as public input
+	// Each witness contains EventPayloadH [32]U8 as public input
 	Witnesses [MaxAggregateProofs]stdgroth16.Witness[sw_bn254.ScalarField]
 
 	// Verifying key for BPrNMsgHCircuit (same for all proofs)
 	VK stdgroth16.VerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]
 }
 
-func (c *AggregateBPrNMsgHCircuitBN254) Define(api frontend.API) error {
+func (c *AggregateBPrNEventProofCircuitBN254) Define(api frontend.API) error {
 	// Create verifier for BN254 Groth16 proofs (emulated)
 	verifier, err := stdgroth16.NewVerifier[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](api)
 	if err != nil {
 		return err
 	}
 
-	// Verify each inner proof and check TargetH consistency
+	// Verify each inner proof and check EventPayloadH consistency
 	for i := 0; i < MaxAggregateProofs; i++ {
 		// Determine if this slot is active (i < NumProofs)
 		iConst := frontend.Variable(i)
@@ -157,11 +157,11 @@ func (c *AggregateBPrNMsgHCircuitBN254) Define(api frontend.API) error {
 			return err
 		}
 
-		// Extract and compare TargetH
+		// Extract and compare EventPayloadH
 		innerTargetH := reconstructTargetHFromWitnessBN254(api, c.Witnesses[i].Public)
 
 		for j := 0; j < 4; j++ {
-			diff := api.Sub(c.TargetH[j], innerTargetH[j])
+			diff := api.Sub(c.EventPayloadH[j], innerTargetH[j])
 			api.AssertIsEqual(api.Mul(isActive, diff), 0)
 		}
 	}
@@ -190,10 +190,10 @@ func reconstructTargetHFromWitnessBN254(api frontend.API, publicInputs []emulate
 }
 
 // ============================================================================
-// Helper functions for TargetH conversion
+// Helper functions for EventPayloadH conversion
 // ============================================================================
 
-// TargetHToLimbs converts a 32-byte TargetH to 4 x 64-bit limbs
+// TargetHToLimbs converts a 32-byte EventPayloadH to 4 x 64-bit limbs
 func TargetHToLimbs(targetH [32]byte) [4]*big.Int {
 	var limbs [4]*big.Int
 	for i := 0; i < 4; i++ {

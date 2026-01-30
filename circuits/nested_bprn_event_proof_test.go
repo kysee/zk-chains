@@ -24,7 +24,7 @@ func TestNestedBPrNMsgH2Circuit(t *testing.T) {
 	privKey1, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	// Common TargetH
+	// Common EventPayloadH
 	targetH := sha256.Sum256([]byte("common_target_hash"))
 
 	// Different PreHs for each signature
@@ -90,7 +90,7 @@ func TestNestedBPrNMsgH4Circuit(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Common TargetH
+	// Common EventPayloadH
 	targetH := sha256.Sum256([]byte("common_target_hash_for_4"))
 
 	// Different PreHs

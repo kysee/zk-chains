@@ -49,7 +49,7 @@ type AggregateMsgHProver struct {
 func NewAggregateMsgHProver() *AggregateMsgHProver {
 	fmt.Println("Creating AggregateMsgHProver...")
 
-	var circuit circuits.BPrNMsgHCircuit
+	var circuit circuits.BPrNEventProofCircuit
 
 	rootDir, _ := types2.ProjectRoot()
 	ccs, pk, vk := circuits.LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &circuit)
@@ -70,17 +70,17 @@ func (p *AggregateMsgHProver) GetVerifyingKey() groth16.VerifyingKey {
 }
 
 // GenerateProofsParallel generates multiple BPrNMsgHCircuit proofs in parallel
-// All inputs must share the same TargetH
+// All inputs must share the same EventPayloadH
 func (p *AggregateMsgHProver) GenerateProofsParallel(inputs []MsgHProofInput) ([]MsgHProofOutput, error) {
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("no inputs provided")
 	}
 
-	// Verify all inputs have the same TargetH
+	// Verify all inputs have the same EventPayloadH
 	commonTargetH := inputs[0].TargetH
 	for i, input := range inputs[1:] {
 		if input.TargetH != commonTargetH {
-			return nil, fmt.Errorf("input %d has different TargetH", i+1)
+			return nil, fmt.Errorf("input %d has different EventPayloadH", i+1)
 		}
 	}
 
@@ -146,7 +146,7 @@ func (p *AggregateMsgHProver) GenerateProofsParallel(inputs []MsgHProofInput) ([
 
 // generateSingleProof generates a single BPrNMsgHCircuit proof
 func (p *AggregateMsgHProver) generateSingleProof(input MsgHProofInput) (groth16.Proof, witness.Witness, error) {
-	// Compute digest: SHA256(PreH || TargetH)
+	// Compute digest: SHA256(PreH || EventPayloadH)
 	digest := sha256.Sum256(append(input.PreH[:], input.TargetH[:]...))
 
 	// Sign the digest
@@ -161,9 +161,9 @@ func (p *AggregateMsgHProver) generateSingleProof(input MsgHProofInput) (groth16
 	}
 
 	// Create circuit assignment
-	assignment := circuits.BPrNMsgHCircuit{
-		PreH:    circuits.ToU8Array32(input.PreH[:]),
-		TargetH: circuits.ToU8Array32(input.TargetH[:]),
+	assignment := circuits.BPrNEventProofCircuit{
+		OriginPayloadH: circuits.ToU8Array32(input.PreH[:]),
+		EventPayloadH:  circuits.ToU8Array32(input.TargetH[:]),
 		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](input.PrivKey.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](input.PrivKey.PublicKey.Y),

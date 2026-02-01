@@ -1,4 +1,4 @@
-package circuits
+package examples
 
 import (
 	"github.com/consensys/gnark/frontend"
@@ -7,6 +7,7 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/uints"
 	gnark_ecdsa "github.com/consensys/gnark/std/signature/ecdsa"
+	"github.com/kysee/zk-chains/circuits"
 )
 
 // MaxNestedProofs is the maximum number of signatures to verify in a single circuit
@@ -80,7 +81,7 @@ func (c *NestedBPrNMsgHCircuit) verifySignature(api frontend.API, idx int, isAct
 	if err != nil {
 		return err
 	}
-	msgHash := hashBytesToElement(api, scalarApi, computedHash)
+	msgHash := circuits.hashBytesToElement(api, scalarApi, computedHash)
 
 	// For inactive slots, we still need to run the verification but with dummy data
 	// The verification will pass because we provide valid dummy signatures
@@ -203,7 +204,7 @@ func verifySingleSignature(
 	if err != nil {
 		return err
 	}
-	msgHash := hashBytesToElement(api, scalarApi, computedHash)
+	msgHash := circuits.hashBytesToElement(api, scalarApi, computedHash)
 
 	// Verify signature
 	pub.Verify(api, sw_emulated.GetCurveParams[emulated.P256Fp](), msgHash, &sig)

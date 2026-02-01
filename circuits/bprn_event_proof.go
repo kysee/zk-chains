@@ -3,19 +3,35 @@ package circuits
 import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
+	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
 	"github.com/consensys/gnark/std/hash/sha2"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/uints"
+	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	gnark_ecdsa "github.com/consensys/gnark/std/signature/ecdsa"
 )
 
 // Circuit size constants
 const (
 	MaxMerkleDepth = 4
+	MaxP256Proofs  = 8
 )
 
 // BPrNEventProofCircuit verifies P256 ECDSA signature on OriginPayloadH + EventPayloadH
 type BPrNEventProofCircuit struct {
+	// Number of actual proofs to verify (must be <= MaxP256Proofs)
+	NumProofs frontend.Variable `gnark:",public"`
+
+	// Inner Groth16 proofs from BPrNMsgHCircuit (compiled with BLS12-377)
+	Proofs [MaxP256Proofs]stdgroth16.Proof[sw_bls12377.G1Affine, sw_bls12377.G2Affine]
+
+	// Inner witnesses (public inputs for each inner proof)
+	// Each witness contains TargetH [32]U8 as public input
+	Witnesses [MaxP256Proofs]stdgroth16.Witness[sw_bls12377.ScalarField]
+
+	// Verifying key for BPrNMsgHCircuit (same for all proofs)
+	VK stdgroth16.VerifyingKey[sw_bls12377.G1Affine, sw_bls12377.G2Affine, sw_bls12377.GT]
+
 	// Secret inputs
 
 	// P256 Public Key (X, Y coordinates)

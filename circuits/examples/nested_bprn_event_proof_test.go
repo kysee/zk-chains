@@ -1,4 +1,4 @@
-package circuits
+package examples
 
 import (
 	"crypto/ecdsa"
@@ -13,6 +13,7 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	ecdsaCircuit "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/consensys/gnark/test"
+	"github.com/kysee/zk-chains/circuits"
 	"github.com/kysee/zk-chains/provers/types"
 	"github.com/stretchr/testify/require"
 )
@@ -50,9 +51,9 @@ func TestNestedBPrNMsgH2Circuit(t *testing.T) {
 
 	// Create witness
 	witness := NestedBPrNMsgH2Circuit{
-		TargetH: ToU8Array32(targetH[:]),
+		TargetH: circuits.ToU8Array32(targetH[:]),
 
-		PreH0: ToU8Array32(preH0[:]),
+		PreH0: circuits.ToU8Array32(preH0[:]),
 		Pub0: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey0.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey0.PublicKey.Y),
@@ -62,7 +63,7 @@ func TestNestedBPrNMsgH2Circuit(t *testing.T) {
 			S: emulated.ValueOf[emulated.P256Fr](s0),
 		},
 
-		PreH1: ToU8Array32(preH1[:]),
+		PreH1: circuits.ToU8Array32(preH1[:]),
 		Pub1: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKey1.PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKey1.PublicKey.Y),
@@ -118,9 +119,9 @@ func TestNestedBPrNMsgH4Circuit(t *testing.T) {
 	var circuit NestedBPrNMsgH4Circuit
 
 	witness := NestedBPrNMsgH4Circuit{
-		TargetH: ToU8Array32(targetH[:]),
+		TargetH: circuits.ToU8Array32(targetH[:]),
 
-		PreH0: ToU8Array32(preHs[0][:]),
+		PreH0: circuits.ToU8Array32(preHs[0][:]),
 		Pub0: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKeys[0].PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKeys[0].PublicKey.Y),
@@ -130,7 +131,7 @@ func TestNestedBPrNMsgH4Circuit(t *testing.T) {
 			S: emulated.ValueOf[emulated.P256Fr](s0),
 		},
 
-		PreH1: ToU8Array32(preHs[1][:]),
+		PreH1: circuits.ToU8Array32(preHs[1][:]),
 		Pub1: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKeys[1].PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKeys[1].PublicKey.Y),
@@ -140,7 +141,7 @@ func TestNestedBPrNMsgH4Circuit(t *testing.T) {
 			S: emulated.ValueOf[emulated.P256Fr](s1),
 		},
 
-		PreH2: ToU8Array32(preHs[2][:]),
+		PreH2: circuits.ToU8Array32(preHs[2][:]),
 		Pub2: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKeys[2].PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKeys[2].PublicKey.Y),
@@ -150,7 +151,7 @@ func TestNestedBPrNMsgH4Circuit(t *testing.T) {
 			S: emulated.ValueOf[emulated.P256Fr](s2),
 		},
 
-		PreH3: ToU8Array32(preHs[3][:]),
+		PreH3: circuits.ToU8Array32(preHs[3][:]),
 		Pub3: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 			X: emulated.ValueOf[emulated.P256Fp](privKeys[3].PublicKey.X),
 			Y: emulated.ValueOf[emulated.P256Fp](privKeys[3].PublicKey.Y),
@@ -187,7 +188,7 @@ func TestNestedBPrNMsgH2Circuit_Compile(t *testing.T) {
 	t.Logf("Number of secret inputs: %d", ccs.GetNbSecretVariables())
 
 	// Compare with single BPrNMsgHCircuit
-	var singleCircuit BPrNEventProofCircuit
+	var singleCircuit circuits.BPrNEventProofCircuit
 	singleCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &singleCircuit)
 	require.NoError(t, err)
 
@@ -210,7 +211,7 @@ func TestNestedBPrNMsgH4Circuit_Compile(t *testing.T) {
 	t.Logf("Number of secret inputs: %d", ccs.GetNbSecretVariables())
 
 	// Compare with single BPrNMsgHCircuit
-	var singleCircuit BPrNEventProofCircuit
+	var singleCircuit circuits.BPrNEventProofCircuit
 	singleCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &singleCircuit)
 	require.NoError(t, err)
 

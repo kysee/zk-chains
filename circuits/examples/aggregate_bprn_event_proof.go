@@ -1,4 +1,4 @@
-package circuits
+package examples
 
 import (
 	"math/big"

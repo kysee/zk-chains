@@ -1,4 +1,4 @@
-package circuits
+package examples
 
 import (
 	"crypto/ecdsa"
@@ -20,8 +20,14 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	ecdsaCircuit "github.com/consensys/gnark/std/signature/ecdsa"
+	"github.com/kysee/zk-chains/circuits"
 	"github.com/kysee/zk-chains/provers/types"
+	types2 "github.com/kysee/zk-chains/types"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	rootDir, _ = types2.ProjectRoot(".")
 )
 
 // InnerProofData holds data needed to generate an inner BPrNEventProofCircuit proof
@@ -78,11 +84,11 @@ func GenerateInnerProofsParallel(
 			}
 
 			// Create witness for inner circuit
-			assignment := BPrNEventProofCircuit{
-				OriginPayloadH: ToU8Array32(d.OriginPayloadH[:]),
-				EventPayloadH:  ToU8Array32(d.EventPayloadH[:]),
-				EventLogRoot:   ToU8Array32(d.EventLogRoot[:]),
-				EventElemH:     ToU8Array32(d.EventElemH[:]),
+			assignment := circuits.BPrNEventProofCircuit{
+				OriginPayloadH: circuits.ToU8Array32(d.OriginPayloadH[:]),
+				EventPayloadH:  circuits.ToU8Array32(d.EventPayloadH[:]),
+				EventLogRoot:   circuits.ToU8Array32(d.EventLogRoot[:]),
+				EventElemH:     circuits.ToU8Array32(d.EventElemH[:]),
 				Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 					X: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.X),
 					Y: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.Y),
@@ -138,7 +144,7 @@ func TestAggregateBPrNEventProofCircuitBN254_Compile(t *testing.T) {
 	t.Log("Step 1: Compile inner circuit (BPrNEventProofCircuit)...")
 
 	// First, compile the inner circuit to get its constraint system
-	var innerCircuit BPrNEventProofCircuit
+	var innerCircuit circuits.BPrNEventProofCircuit
 	innerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &innerCircuit)
 	require.NoError(t, err)
 	t.Logf("Inner circuit constraints: %d", innerCcs.GetNbConstraints())
@@ -187,8 +193,8 @@ func TestGenerateInnerProofsParallel(t *testing.T) {
 
 	// Step 1: Setup inner circuit (BPrNEventProofCircuit)
 	t.Log("Setting up inner circuit...")
-	var innerCircuit BPrNEventProofCircuit
-	innerCcs, innerPk, innerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
+	var innerCircuit circuits.BPrNEventProofCircuit
+	innerCcs, innerPk, innerVk := circuits.LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
 	t.Logf("Inner circuit constraints: %d", innerCcs.GetNbConstraints())
 
 	// Step 2: Generate test data with common EventPayloadH
@@ -248,8 +254,8 @@ func TestAggregateProofsWithRecursion(t *testing.T) {
 
 	// Step 1: Setup inner circuit
 	t.Log("Setting up inner circuit (BPrNEventProofCircuit)...")
-	var innerCircuit BPrNEventProofCircuit
-	innerCcs, innerPk, innerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
+	var innerCircuit circuits.BPrNEventProofCircuit
+	innerCcs, innerPk, innerVk := circuits.LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
 	t.Logf("Inner circuit constraints: %d", innerCcs.GetNbConstraints())
 
 	// Step 2: Generate inner proofs with common EventPayloadH

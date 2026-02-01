@@ -1,6 +1,7 @@
 package event
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"testing"
@@ -8,11 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var evtPayload EventPayload
+var evtPayload *EventPayload
 
 func init() {
-	for i := 0; i < 11; i++ {
-		evtValue := NewPostMessageEventLogValueWith(
+	evtLogs := make([]*EventLog, 11)
+	for i := 0; i < len(evtLogs); i++ {
+		evtLogValue := NewPostMessageEventLogValueWith(
 			fmt.Sprintf("srcChainId-%d", i),
 			fmt.Sprintf("srcDappId-%d", i),
 			fmt.Sprintf("srcAcctId-%d", i),
@@ -23,11 +25,13 @@ func init() {
 			[]byte(fmt.Sprintf("hello world-%d", i)),
 		)
 
-		evtPayload.Logs = append(evtPayload.Logs, &EventLog{
+		evtLogs[i] = &EventLog{
 			Type:  "PostMessageEventLogValue",
-			Value: evtValue,
-		})
+			Value: evtLogValue,
+		}
 	}
+
+	evtPayload = NewEventPayload(evtLogs...)
 }
 
 func TestMerkle_PoostMessageEventLogValue(t *testing.T) {
@@ -36,8 +40,8 @@ func TestMerkle_PoostMessageEventLogValue(t *testing.T) {
 	fmt.Printf("evtPayloadRoot: %x\n", evtPayloadRoot)
 
 	for i, evtLog := range evtPayload.Logs {
-		logProofHashes, err := evtPayload.Proof(i)
 		logRoot, err := evtLog.Root()
+		logProofHashes, err := evtPayload.Proof(i)
 		require.NoError(t, err)
 		fmt.Println("======================================================")
 		fmt.Printf("EventLog[%d].Value root: %x\n", i, logRoot)
@@ -46,24 +50,45 @@ func TestMerkle_PoostMessageEventLogValue(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ret)
 
-		leaves := evtLog.Leaves()
+		leaf := sha256.Sum256(logRoot[:])
+		require.True(t, localVerify(i, leaf[:], logProofHashes, evtPayloadRoot))
 
-		for idx, leaf := range leaves {
+		elems, err := evtLog.Leaves()
+		require.NoError(t, err)
 
-			proofHashes, err := evtLog.Proof(idx)
+		for idx, elem := range elems {
+			elemProofHashes, err := evtLog.Proof(idx)
 			require.NoError(t, err)
 
 			fmt.Println("---")
-			fmt.Printf("leaf[%d]: %s, %x\n", idx, leaf, sha256.Sum256(leaf))
-			for i, proofHash := range proofHashes {
+			fmt.Printf("elem[%d]: %s, %x\n", idx, elem, sha256.Sum256(elem))
+			for i, proofHash := range elemProofHashes {
 				fmt.Printf("proofHashes[%d]: %x\n", i, proofHash)
 			}
 
-			ret, err := Verify(idx, evtLog.Leaves()[idx], proofHashes, logRoot)
+			require.NoError(t, err)
+			ret, err := Verify(idx, elem, elemProofHashes, logRoot)
 			require.NoError(t, err)
 			require.True(t, ret)
+
+			leafH := sha256.Sum256(elem)
+			require.True(t, localVerify(idx, leafH[:], elemProofHashes, logRoot))
 		}
 
 	}
+}
 
+func localVerify(idx int, leafHash []byte, proofHashes [][]byte, root []byte) bool {
+	index := uint64(idx) + (1 << uint(len(proofHashes)))
+	computed := [32]byte(leafHash)
+
+	for _, proofHash := range proofHashes {
+		if index%2 == 0 {
+			computed = sha256.Sum256(append(computed[:], proofHash[:]...))
+		} else {
+			computed = sha256.Sum256(append(proofHash[:], computed[:]...))
+		}
+		index >>= 1
+	}
+	return bytes.Equal(computed[:], root)
 }

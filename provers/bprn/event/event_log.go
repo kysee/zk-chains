@@ -1,9 +1,5 @@
 package event
 
-import (
-	"github.com/wealdtech/go-merkletree/v2"
-)
-
 type EventLog struct {
 	Type  string      `json:"type"`
 	Value IMerkleable `json:"value"` // e.g. PostMessageEventLog.Marshal()
@@ -17,50 +13,31 @@ func (evtlog *EventLog) Proof(idx int) ([][]byte, error) {
 	return evtlog.Value.Proof(idx)
 }
 
-func (evtlog *EventLog) Leaves() [][]byte {
+func (evtlog *EventLog) Leaves() ([][]byte, error) {
 	return evtlog.Value.Leaves()
 }
 
 type EventPayload struct {
+	*merkleableType
 	Logs []*EventLog
-
-	tree *merkletree.MerkleTree
 }
 
-func (ep *EventPayload) Root() ([]byte, error) {
-	data := make([][]byte, len(ep.Logs))
+func NewEventPayload(evtLogs ...*EventLog) *EventPayload {
+	ret := &EventPayload{
+		Logs: evtLogs,
+	}
+	ret.merkleableType = newMerkleableType(ret.Leaves)
+	return ret
+}
+
+func (ep *EventPayload) Leaves() ([][]byte, error) {
+	leaves := make([][]byte, len(ep.Logs))
 	for i, l := range ep.Logs {
-		root, err := l.Root()
+		leaf, err := l.Root()
 		if err != nil {
 			return nil, err
 		}
-		data[i] = root
+		leaves[i] = leaf
 	}
-	tree, err := merkletree.NewTree(
-		merkletree.WithData(data),
-		merkletree.WithHashType(&SHA256Hasher{}),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	ep.tree = tree
-
-	size := len(tree.Root())
-	result := make([]byte, size)
-	copy(result, tree.Root())
-	return result, nil
-}
-
-func (ep *EventPayload) Proof(idx int) ([][]byte, error) {
-	if ep.tree == nil {
-		_, _ = ep.Root()
-	}
-
-	proof, err := ep.tree.GenerateProofWithIndex(uint64(idx), 0)
-	if err != nil {
-		return nil, err
-	}
-
-	return proof.Hashes, nil
+	return leaves, nil
 }

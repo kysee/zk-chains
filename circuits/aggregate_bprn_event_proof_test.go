@@ -305,7 +305,7 @@ func TestAggregateProofsWithRecursion(t *testing.T) {
 	// In production, you'd generate valid dummy proofs for unused slots
 
 	// Step 4: Create aggregate circuit assignment
-	targetHLimbs := TargetHToLimbs(commonTargetH)
+	targetHLimbs := ToLimbs(commonTargetH)
 
 	aggregateAssignment := AggregateBPrNEventProofCircuitBN254{
 		EventPayloadH: [4]frontend.Variable{

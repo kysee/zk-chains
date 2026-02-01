@@ -193,8 +193,8 @@ func reconstructTargetHFromWitnessBN254(api frontend.API, publicInputs []emulate
 // Helper functions for EventPayloadH conversion
 // ============================================================================
 
-// TargetHToLimbs converts a 32-byte EventPayloadH to 4 x 64-bit limbs
-func TargetHToLimbs(targetH [32]byte) [4]*big.Int {
+// ToLimbs converts a 32-byte EventPayloadH to 4 x 64-bit limbs
+func ToLimbs(targetH [32]byte) [4]*big.Int {
 	var limbs [4]*big.Int
 	for i := 0; i < 4; i++ {
 		limbs[i] = new(big.Int).SetBytes(targetH[i*8 : (i+1)*8])

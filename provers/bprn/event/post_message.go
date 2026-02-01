@@ -14,6 +14,7 @@ type PostMessageEventLogValue struct {
 	DstAcctId  string `json:"dstAcctId"`
 	MsgIdx     uint64 `json:"msgIdx"`
 	MsgPayload []byte `json:"msgPayload"`
+	X          string
 }
 
 func NewPostMessageEventLogValue() *PostMessageEventLogValue {
@@ -31,12 +32,13 @@ func NewPostMessageEventLogValueWith(srcChainId, srcDappId, srcAcctId, dstChainI
 		DstAcctId:  dstAcctId,
 		MsgIdx:     msgIdx,
 		MsgPayload: msgPayload,
+		X:          "x data",
 	}
 	ret.merkleableType = newMerkleableType(ret.Leaves)
 	return ret
 }
 
-func (p *PostMessageEventLogValue) Leaves() [][]byte {
+func (p *PostMessageEventLogValue) Leaves() ([][]byte, error) {
 	msgIdxBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(msgIdxBytes, p.MsgIdx)
 
@@ -49,5 +51,6 @@ func (p *PostMessageEventLogValue) Leaves() [][]byte {
 		[]byte(p.DstAcctId),
 		msgIdxBytes,
 		p.MsgPayload,
-	}
+		[]byte(p.X),
+	}, nil
 }

@@ -9,21 +9,25 @@ import (
 type IMerkleable interface {
 	Root() ([]byte, error)
 	Proof(int) ([][]byte, error)
-	Leaves() [][]byte
+	Leaves() ([][]byte, error)
 }
 
 type merkleableType struct {
-	leaves func() [][]byte
+	leaves func() ([][]byte, error)
 	tree   *merkletree.MerkleTree
 }
 
-func newMerkleableType(leaves func() [][]byte) *merkleableType {
+func newMerkleableType(leaves func() ([][]byte, error)) *merkleableType {
 	return &merkleableType{leaves: leaves}
 }
 
 func (p *merkleableType) Root() ([]byte, error) {
+	leaves, err := p.leaves()
+	if err != nil {
+		return nil, err
+	}
 	tree, err := merkletree.NewTree(
-		merkletree.WithData(p.leaves()),
+		merkletree.WithData(leaves),
 		merkletree.WithHashType(&SHA256Hasher{}),
 	)
 	if err != nil {
@@ -51,7 +55,7 @@ func (p *merkleableType) Proof(idx int) ([][]byte, error) {
 	return proof.Hashes, nil
 }
 
-func (p *merkleableType) Leaves() [][]byte {
+func (p *merkleableType) Leaves() ([][]byte, error) {
 	panic("not implemented")
 }
 

@@ -3,6 +3,7 @@ module github.com/kysee/zk-chains
 go 1.24.4
 
 require (
+	github.com/beatoz/chaincode-base v0.0.0-00010101000000-000000000000
 	github.com/consensys/gnark v0.14.0
 	github.com/consensys/gnark-crypto v0.19.2
 	github.com/ethereum/go-ethereum v1.16.7
@@ -15,6 +16,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.41.0
 )
+
+replace github.com/beatoz/chaincode-base => ../../beatoz/chaincode-base
 
 require (
 	github.com/Knetic/govaluate v3.0.0+incompatible // indirect

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"math/big"
 	"math/bits"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/frontend/cs/scs"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/hash/sha2"
 	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/uints"
@@ -395,10 +397,10 @@ func sha256Pair(api frontend.API, left, right [32]uints.U8) [32]uints.U8 {
 //   - root: the expected Merkle root (32 bytes)
 //   - proof: sibling hashes along the path (MaxMerkleDepth elements)
 //   - depth: actual tree depth (must be <= MaxMerkleDepth)
-func VerifyMerkleProof(api frontend.API, leafIdx frontend.Variable, leaf, root []uints.U8, proof [MaxMerkleDepth][32]uints.U8, depth int) frontend.Variable {
+func VerifyMerkleProof(api frontend.API, leafIdx frontend.Variable, leafHash, root []uints.U8, proof [MaxMerkleDepth][32]uints.U8, depth int) frontend.Variable {
 	indexBits := api.ToBinary(leafIdx, depth)
 
-	current := [32]uints.U8(leaf)
+	current := [32]uints.U8(leafHash)
 
 	for i := 0; i < depth; i++ {
 		sibling := proof[i]
@@ -477,4 +479,24 @@ func MerkleVerify(idx int, leafHash []byte, proofHashes [][]byte, root []byte) b
 		index >>= 1
 	}
 	return bytes.Equal(computed[:], root)
+}
+
+// ReconstructTargetHFromWitnessBN254 reconstructs 4 x 64-bit limbs from 32 U8 witness elements (BN254 version)
+func ReconstructTargetHFromWitnessBN254(api frontend.API, publicInputs []emulated.Element[sw_bn254.ScalarField]) [4]frontend.Variable {
+	var result [4]frontend.Variable
+
+	for limbIdx := 0; limbIdx < 4; limbIdx++ {
+		limbValue := frontend.Variable(0)
+		for byteIdx := 0; byteIdx < 8; byteIdx++ {
+			globalIdx := limbIdx*8 + byteIdx
+			byteVal := publicInputs[globalIdx].Limbs[0]
+
+			shift := new(big.Int).Exp(big.NewInt(256), big.NewInt(int64(7-byteIdx)), nil)
+			shifted := api.Mul(byteVal, shift)
+			limbValue = api.Add(limbValue, shifted)
+		}
+		result[limbIdx] = limbValue
+	}
+
+	return result
 }

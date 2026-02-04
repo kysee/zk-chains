@@ -11,7 +11,7 @@ import (
 // Circuit size constants
 const (
 	MaxMerkleDepth = 4
-	MaxP256Proofs  = 8
+	MaxP256Proofs  = 2
 )
 
 // BPrNEventProofCircuit verifies P256 ECDSA signature on OriginPayloadH + EventPayloadH

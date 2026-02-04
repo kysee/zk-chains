@@ -1,15 +1,30 @@
 package circuits
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
+	mrand "math/rand"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	bprnEvent "github.com/beatoz/chaincode-base/event"
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/backend/witness"
+	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
+	"github.com/consensys/gnark/std/math/emulated"
+	"github.com/consensys/gnark/std/math/uints"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
+	ecdsaCircuit "github.com/consensys/gnark/std/signature/ecdsa"
+	"github.com/consensys/gnark/test"
+	proverTypes "github.com/kysee/zk-chains/provers/types"
+	"github.com/stretchr/testify/require"
 )
 
 var evtPayload bprnEvent.EventPayload
@@ -69,164 +84,203 @@ func TestBPrNEventProofCircuit_Compile(t *testing.T) {
 	_, _, _ = LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &outerCircuit)
 }
 
-//func TestBPrNEventProofCircuit(t *testing.T) {
-//	// Generate P256 key pair
-//	privKeys := make([]*ecdsa.PrivateKey, 5)
-//	for i := 0; i < len(privKeys); i++ {
-//		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-//		require.NoError(t, err)
-//		privKeys[i] = privKey
-//	}
-//
-//	// Prepare data
-//	payloadTree := bprnEvent.NewMerkleTreeType(evtPayload)
-//	originPayloadH := sha256.Sum256([]byte("any_random_bytes"))
-//	eventPayloadH, err := payloadTree.Root()
-//	require.NoError(t, err)
-//
-//	evtLogIdx := mrand.Intn(len(evtPayload))
-//	evtLog := evtPayload[evtLogIdx]
-//	evtLogTree := bprnEvent.NewMerkleTreeType(evtLog)
-//	evtLogRoot, err := evtLogTree.Root()
-//	require.NoError(t, err)
-//	evtLogRootH := sha256.Sum256(evtLogRoot[:])
-//	evtLogRootBranches, err := payloadTree.Proof(evtLogIdx)
-//	require.NoError(t, err)
-//
-//	require.True(t, MerkleVerify(evtLogIdx, evtLogRootH[:], evtLogRootBranches, eventPayloadH))
-//
-//	elems := evtLog.Leaves()
-//	elemIdx := mrand.Intn(len(elems))
-//	evtElemH := sha256.Sum256(elems[elemIdx]) // target to verify
-//	evtElemBranches, err := evtLogTree.Proof(elemIdx)
-//
-//	require.True(t, MerkleVerify(elemIdx, evtElemH[:], evtElemBranches, evtLogRoot))
-//
-//	// Concatenate OriginPayloadH and EventPayloadH
-//	// and hash the concatenated data
-//	msgh := sha256.Sum256(append(originPayloadH[:], eventPayloadH[:]...))
-//
-//	//
-//	// Inner Circuit
-//	var innerCircuit P256ProofCircuit
-//	innerCcs, innerPk, innerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
-//
-//	numProofs := len(privKeys)
-//	innerProofsCh := make(chan *InnerProofResult, numProofs)
-//
-//	var wg sync.WaitGroup
-//	for i := 0; i < len(privKeys); i++ {
-//		wg.Add(1)
-//		go func(idx int) {
-//			defer wg.Done()
-//
-//			privKey := privKeys[idx]
-//
-//			// Sign the hash
-//			sigDER, err := privKey.Sign(rand.Reader, msgh[:], nil)
-//			require.NoError(t, err)
-//
-//			// Parse DER signature to get R and S
-//			r, s, err := proverTypes.ParseDERSignature(sigDER)
-//			require.NoError(t, err)
-//
-//			// Verify signature outside circuit first
-//			valid := ecdsa.Verify(&privKey.PublicKey, msgh[:], r, s)
-//			require.True(t, valid, "signature should be valid")
-//
-//			// Create witness for inner circuit
-//			assignment := P256ProofCircuit{
-//				Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
-//					X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
-//					Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
-//				},
-//				Sig: ecdsaCircuit.Signature[emulated.P256Fr]{
-//					R: emulated.ValueOf[emulated.P256Fr](r),
-//					S: emulated.ValueOf[emulated.P256Fr](s),
-//				},
-//				H0:   ToU8Array32(originPayloadH[:]),
-//				MsgH: ToU8Array32(evtElemH[:]),
-//			}
-//
-//			// Test that the circuit is satisfied
-//			assert := test.NewAssert(t)
-//			err = test.IsSolved(&P256ProofCircuit{}, &assignment, ecc.BN254.ScalarField())
-//			assert.NoError(err)
-//
-//			wit, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
-//			require.NoError(t, err)
-//
-//			proof, err := groth16.Prove(innerCcs, innerPk, wit)
-//			require.NoError(t, err)
-//
-//			innerProofsCh <- &InnerProofResult{
-//				Index:   idx,
-//				Proof:   proof,
-//				Witness: wit,
-//				Err:     nil,
-//			}
-//		}(i)
-//	}
-//
-//	go func() {
-//		wg.Wait()
-//		close(innerProofsCh)
-//	}()
-//
-//	// Convert proofs and witnesses
-//	var circuitProofs [MaxP256Proofs]stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
-//	var circuitWitnesses [MaxP256Proofs]stdgroth16.Witness[sw_bn254.ScalarField]
-//
-//	// Convert inner VK to circuit format
-//	circuitVk, err := stdgroth16.ValueOfVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerVk)
-//	require.NoError(t, err)
-//
-//	for innerProof := range innerProofsCh {
-//		idx := innerProof.Index
-//
-//		circuitProofs[idx], err = stdgroth16.ValueOfProof[sw_bn254.G1Affine, sw_bn254.G2Affine](innerProof.Proof)
-//		require.NoError(t, err)
-//
-//		pubWit, err := innerProof.Witness.Public()
-//		require.NoError(t, err)
-//		circuitWitnesses[idx], err = stdgroth16.ValueOfWitness[sw_bn254.ScalarField](pubWit)
-//		require.NoError(t, err)
-//	}
-//
-//	//
-//	// Outer circuit
-//	var outerCircuit BPrNEventProofCircuit
-//
-//	var _evtLogRootBranches [MaxMerkleDepth][32]uints.U8
-//	var _evtElemBranches [MaxMerkleDepth][32]uints.U8
-//
-//	for i, br := range evtLogRootBranches {
-//		_evtLogRootBranches[i] = ToU8Array32(br)
-//	}
-//	for i, br := range evtElemBranches {
-//		_evtElemBranches[i] = ToU8Array32(br)
-//	}
-//
-//	outerAssignment := BPrNEventProofCircuit{
-//		NumProofs:            int64(numProofs),
-//		Proofs:               circuitProofs,
-//		Witnesses:            circuitWitnesses,
-//		VK:                   circuitVk,
-//		EventPayloadH:        ToU8Array32(originPayloadH[:]),
-//		EventLogIdx:          int64(evtLogIdx),
-//		EventLogRootBranches: _evtLogRootBranches,
-//		EventLogRoot:         ToU8Array32(evtLogRoot),
-//		EventElemIdx:         int64(elemIdx),
-//		EventElemHBranches:   _evtElemBranches,
-//		EventElemH:           ToU8Array32(evtElemH[:]),
-//	}
-//
-//	t.Logf("P256 ECDSA signature verification circuit test passed")
-//	t.Logf("OriginPayloadH: %x", originPayloadH)
-//	t.Logf("EventPayloadH: %x", eventPayloadH)
-//	t.Logf("EventLog Index: %v", evtLogIdx)
-//	t.Logf("EventLog Leaf[%v], %v", elemIdx, string(elems[elemIdx]))
-//}
+func TestBPrNEventProofCircuit(t *testing.T) {
+	// Generate P256 key pair
+	privKeys := make([]*ecdsa.PrivateKey, MaxP256Proofs)
+	for i := 0; i < len(privKeys); i++ {
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		privKeys[i] = privKey
+	}
+
+	// Prepare data
+	h0 := sha256.Sum256([]byte("any_random_bytes"))
+	payloadTree := bprnEvent.NewMerkleTreeType(evtPayload)
+	eventPayloadH, err := payloadTree.Root()
+	require.NoError(t, err)
+
+	evtLogIdx := mrand.Intn(len(evtPayload))
+	evtLog := evtPayload[evtLogIdx]
+	evtLogTree := bprnEvent.NewMerkleTreeType(evtLog)
+	evtLogRoot, err := evtLogTree.Root()
+	require.NoError(t, err)
+	evtLogRootH := sha256.Sum256(evtLogRoot[:])
+	evtLogRootBranches, err := payloadTree.Proof(evtLogIdx)
+	require.NoError(t, err)
+
+	require.True(t, MerkleVerify(evtLogIdx, evtLogRootH[:], evtLogRootBranches, eventPayloadH))
+
+	elems := evtLog.Leaves()
+	elemIdx := mrand.Intn(len(elems))
+	evtElemH := sha256.Sum256(elems[elemIdx]) // target to verify
+	evtElemBranches, err := evtLogTree.Proof(elemIdx)
+
+	require.True(t, MerkleVerify(elemIdx, evtElemH[:], evtElemBranches, evtLogRoot))
+
+	// Concatenate OriginPayloadH and EventPayloadH
+	// and hash the concatenated data
+	msgh := sha256.Sum256(append(h0[:], eventPayloadH[:]...))
+
+	//
+	// Inner Circuit
+	var innerCircuit P256ProofCircuit
+	innerCcs, innerPk, innerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &innerCircuit)
+
+	numProofs := len(privKeys)
+	innerProofsCh := make(chan *InnerProofResult, numProofs)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numProofs; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			privKey := privKeys[idx]
+
+			// Sign the hash
+			sigDER, err := privKey.Sign(rand.Reader, msgh[:], nil)
+			require.NoError(t, err)
+
+			// Parse DER signature to get R and S
+			r, s, err := proverTypes.ParseDERSignature(sigDER)
+			require.NoError(t, err)
+
+			// Verify signature outside circuit first
+			valid := ecdsa.Verify(&privKey.PublicKey, msgh[:], r, s)
+			require.True(t, valid, "signature should be valid")
+
+			// Create witness for inner circuit
+			assignment := P256ProofCircuit{
+				Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
+					X: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.X),
+					Y: emulated.ValueOf[emulated.P256Fp](privKey.PublicKey.Y),
+				},
+				Sig: ecdsaCircuit.Signature[emulated.P256Fr]{
+					R: emulated.ValueOf[emulated.P256Fr](r),
+					S: emulated.ValueOf[emulated.P256Fr](s),
+				},
+				H0:   ToU8Array32(h0[:]),
+				MsgH: ToU8Array32(eventPayloadH[:]),
+			}
+
+			// Test that the circuit is satisfied
+			assert := test.NewAssert(t)
+			err = test.IsSolved(&P256ProofCircuit{}, &assignment, ecc.BN254.ScalarField())
+			assert.NoError(err)
+
+			wit, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
+			require.NoError(t, err)
+
+			proof, err := groth16.Prove(innerCcs, innerPk, wit)
+			require.NoError(t, err)
+
+			innerProofsCh <- &InnerProofResult{
+				Index:   idx,
+				Proof:   proof,
+				Witness: wit,
+				Err:     nil,
+			}
+		}(i)
+	}
+
+	go func() {
+		wg.Wait()
+		close(innerProofsCh)
+	}()
+
+	// Convert proofs and witnesses
+	var circuitProofs [MaxP256Proofs]stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
+	var circuitWitnesses [MaxP256Proofs]stdgroth16.Witness[sw_bn254.ScalarField]
+
+	// Convert inner VK to circuit format
+	circuitVk, err := stdgroth16.ValueOfVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerVk)
+	require.NoError(t, err)
+
+	for innerProof := range innerProofsCh {
+		idx := innerProof.Index
+
+		circuitProofs[idx], err = stdgroth16.ValueOfProof[sw_bn254.G1Affine, sw_bn254.G2Affine](innerProof.Proof)
+		require.NoError(t, err)
+
+		pubWit, err := innerProof.Witness.Public()
+		require.NoError(t, err)
+		circuitWitnesses[idx], err = stdgroth16.ValueOfWitness[sw_bn254.ScalarField](pubWit)
+		require.NoError(t, err)
+	}
+
+	//
+	// Outer circuit
+	var _evtLogRootBranches [MaxMerkleDepth][32]uints.U8
+	var _evtElemBranches [MaxMerkleDepth][32]uints.U8
+
+	for i, br := range evtLogRootBranches {
+		_evtLogRootBranches[i] = ToU8Array32(br)
+	}
+	for i, br := range evtElemBranches {
+		_evtElemBranches[i] = ToU8Array32(br)
+	}
+
+	outerAssignment := &BPrNEventProofCircuit{
+		NumProofs:            int64(numProofs),
+		Proofs:               circuitProofs,
+		Witnesses:            circuitWitnesses,
+		VK:                   circuitVk,
+		EventPayloadH:        ToU8Array32(eventPayloadH[:]),
+		EventLogIdx:          int64(evtLogIdx),
+		EventLogRootBranches: _evtLogRootBranches,
+		EventLogRoot:         ToU8Array32(evtLogRoot),
+		EventElemIdx:         int64(elemIdx),
+		EventElemHBranches:   _evtElemBranches,
+		EventElemH:           ToU8Array32(evtElemH[:]),
+	}
+	// Create placeholders for outer circuit using inner circuit's CCS
+	placeholderVK := stdgroth16.PlaceholderVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerCcs)
+	placeholderProof := stdgroth16.PlaceholderProof[sw_bn254.G1Affine, sw_bn254.G2Affine](innerCcs)
+	placeholderWitness := stdgroth16.PlaceholderWitness[sw_bn254.ScalarField](innerCcs)
+
+	var placeholderProofs [MaxP256Proofs]stdgroth16.Proof[sw_bn254.G1Affine, sw_bn254.G2Affine]
+	var placeholderWitnesses [MaxP256Proofs]stdgroth16.Witness[sw_bn254.ScalarField]
+	for i := 0; i < MaxP256Proofs; i++ {
+		placeholderProofs[i] = placeholderProof
+		placeholderWitnesses[i] = placeholderWitness
+	}
+
+	outerCircuit := &BPrNEventProofCircuit{
+		Proofs:    placeholderProofs,
+		Witnesses: placeholderWitnesses,
+		VK:        placeholderVK,
+	}
+
+	fullWitness, err := frontend.NewWitness(outerAssignment, ecc.BN254.ScalarField())
+	require.NoError(t, err, "Failed to create witness")
+
+	outerCcs, outerPk, outerVk := LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), outerCircuit)
+	// Prove using pre-compiled circuit and keys
+	fmt.Println("Proving...")
+
+	start := time.Now()
+	proof, err := groth16.Prove(outerCcs, outerPk, fullWitness)
+	require.NoError(t, err, "Proof generation failed")
+	fmt.Println("Proof generation time:", time.Since(start))
+
+	// Extract public inputs for verification
+	publicWitness, err := frontend.NewWitness(outerAssignment, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	require.NoError(t, err, "Failed to create public witness")
+
+	// Verify proof using pre-compiled verifying key
+	fmt.Println("Verifying...")
+	start = time.Now()
+	err = groth16.Verify(proof, outerVk, publicWitness)
+	require.NoError(t, err, "Proof verification failed")
+	fmt.Println("Verify time:", time.Since(start))
+
+	t.Logf("P256 ECDSA signature verification circuit test passed")
+	t.Logf("OriginPayloadH: %x", eventPayloadH)
+	t.Logf("EventPayloadH: %x", eventPayloadH)
+	t.Logf("EventLog Index: %v", evtLogIdx)
+	t.Logf("EventLog Leaf[%v], %v", elemIdx, string(elems[elemIdx]))
+}
+
 //
 //func TestBPrNEventProofCircuit_WrongMsgH(t *testing.T) {
 //	// Generate P256 key pair

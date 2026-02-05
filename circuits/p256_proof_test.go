@@ -162,18 +162,6 @@ func TestP256ProofCircuit_WrongHash(t *testing.T) {
 	t.Logf("Wrong hash correctly rejected")
 }
 
-func TestP256ProofCircuit_Setup_Groth16(t *testing.T) {
-	rootDir, _ := zkTypes.ProjectRoot()
-	var c P256ProofCircuit
-	_, _, _ = LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &c)
-}
-
-//func TestP256ProofCircuit_Setup_Plonk(t *testing.T) {
-//	rootDir, _ := zkTypes.ProjectRoot()
-//	var c P256ProofCircuit
-//	_, _, _ = LoadOrSetupCircuit_Plonk(filepath.Join(rootDir, ".build"), &c)
-//}
-
 func TestP256ProofCircuit_ProveAndVerify(t *testing.T) {
 	// Generate P256 key pair
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -236,3 +224,15 @@ func TestP256ProofCircuit_ProveAndVerify(t *testing.T) {
 	require.NoError(t, err, "Proof verification failed")
 	fmt.Println("Verify time:", time.Since(start))
 }
+
+func TestP256ProofCircuit_Setup_Groth16(t *testing.T) {
+	rootDir, _ := zkTypes.ProjectRoot()
+	var c P256ProofCircuit
+	_, _, _ = LoadOrSetupCircuit_Groth16(filepath.Join(rootDir, ".build"), &c)
+}
+
+//func TestP256ProofCircuit_Setup_Plonk(t *testing.T) {
+//	rootDir, _ := zkTypes.ProjectRoot()
+//	var c P256ProofCircuit
+//	_, _, _ = LoadOrSetupCircuit_Plonk(filepath.Join(rootDir, ".build"), &c)
+//}

@@ -17,11 +17,8 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
-	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
-	ecdsaCircuit "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/kysee/zk-chains/circuits"
-	"github.com/kysee/zk-chains/provers/types"
 	types2 "github.com/kysee/zk-chains/types"
 	"github.com/stretchr/testify/require"
 )
@@ -66,37 +63,37 @@ func GenerateInnerProofsParallel(
 			result := InnerProofResult{Index: idx}
 
 			// Compute digest: SHA256(OriginPayloadH || EventPayloadH)
-			digest := sha256.Sum256(append(d.OriginPayloadH[:], d.EventPayloadH[:]...))
+			//digest := sha256.Sum256(append(d.OriginPayloadH[:], d.EventPayloadH[:]...))
 
-			// Sign the digest
-			sigDER, err := d.PrivKey.Sign(rand.Reader, digest[:], nil)
-			if err != nil {
-				result.Err = fmt.Errorf("sign error at index %d: %w", idx, err)
-				results <- result
-				return
-			}
+			//// Sign the digest
+			//sigDER, err := d.PrivKey.Sign(rand.Reader, digest[:], nil)
+			//if err != nil {
+			//	result.Err = fmt.Errorf("sign error at index %d: %w", idx, err)
+			//	results <- result
+			//	return
+			//}
 
-			r, s, err := types.ParseDERSignature(sigDER)
-			if err != nil {
-				result.Err = fmt.Errorf("parse signature error at index %d: %w", idx, err)
-				results <- result
-				return
-			}
+			//r, s, err := types.ParseDERSignature(sigDER)
+			//if err != nil {
+			//	result.Err = fmt.Errorf("parse signature error at index %d: %w", idx, err)
+			//	results <- result
+			//	return
+			//}
 
 			// Create witness for inner circuit
 			assignment := circuits.BPrNEventProofCircuit{
-				OriginPayloadH: circuits.ToU8Array32(d.OriginPayloadH[:]),
-				EventPayloadH:  circuits.ToU8Array32(d.EventPayloadH[:]),
-				EventLogRoot:   circuits.ToU8Array32(d.EventLogRoot[:]),
-				EventElemH:     circuits.ToU8Array32(d.EventElemH[:]),
-				Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
-					X: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.X),
-					Y: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.Y),
-				},
-				Sig: ecdsaCircuit.Signature[emulated.P256Fr]{
-					R: emulated.ValueOf[emulated.P256Fr](r),
-					S: emulated.ValueOf[emulated.P256Fr](s),
-				},
+				//OriginPayloadH: circuits.ToU8Array32(d.OriginPayloadH[:]),
+				EventPayloadH: circuits.ToU8Array32(d.EventPayloadH[:]),
+				EventLogRoot:  circuits.ToU8Array32(d.EventLogRoot[:]),
+				EventElemH:    circuits.ToU8Array32(d.EventElemH[:]),
+				//Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
+				//	X: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.X),
+				//	Y: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.Y),
+				//},
+				//Sig: ecdsaCircuit.Signature[emulated.P256Fr]{
+				//	R: emulated.ValueOf[emulated.P256Fr](r),
+				//	S: emulated.ValueOf[emulated.P256Fr](s),
+				//},
 			}
 
 			wit, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())

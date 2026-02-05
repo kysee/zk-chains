@@ -81,7 +81,7 @@ func (c *NestedBPrNMsgHCircuit) verifySignature(api frontend.API, idx int, isAct
 	if err != nil {
 		return err
 	}
-	msgHash := circuits.hashBytesToElement(api, scalarApi, computedHash)
+	msgHash := circuits.HashBytesToElement(api, scalarApi, computedHash)
 
 	// For inactive slots, we still need to run the verification but with dummy data
 	// The verification will pass because we provide valid dummy signatures
@@ -204,7 +204,7 @@ func verifySingleSignature(
 	if err != nil {
 		return err
 	}
-	msgHash := circuits.hashBytesToElement(api, scalarApi, computedHash)
+	msgHash := circuits.HashBytesToElement(api, scalarApi, computedHash)
 
 	// Verify signature
 	pub.Verify(api, sw_emulated.GetCurveParams[emulated.P256Fp](), msgHash, &sig)

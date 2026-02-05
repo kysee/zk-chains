@@ -35,7 +35,7 @@ func (c *P256ProofCircuit) Define(api frontend.API) error {
 	if err != nil {
 		return err
 	}
-	msgHash := hashBytesToElement(api, scalarApi, msgH[:])
+	msgHash := HashBytesToElement(api, scalarApi, msgH[:])
 
 	// Verify ECDSA P256 signature
 	// This implicitly verifies that the paddedData from the hint corresponds to the TxLimbs

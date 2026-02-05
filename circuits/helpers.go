@@ -66,6 +66,7 @@ func LoadOrSetupCircuit_Groth16(outDir string, c frontend.Circuit) (constraint.C
 	fmt.Printf("[groth16] Number of constraints: %d\n", ccs.GetNbConstraints())
 	fmt.Printf("[groth16] Number of public inputs: %d\n", ccs.GetNbPublicVariables())
 	fmt.Printf("[groth16] Number of secret inputs: %d\n", ccs.GetNbSecretVariables())
+	fmt.Printf("[groth16] Circuit commitments: %v", ccs.GetCommitments().CommitmentIndexes())
 
 	// Step 2: Setup (generate proving and verifying keys)
 	fpk, err0 := os.Open(pkPath)
@@ -150,6 +151,7 @@ func LoadOrSetupCircuit_Plonk(outDir string, c frontend.Circuit) (constraint.Con
 	fmt.Printf("[plonk] Number of constraints: %d\n", ccs.GetNbConstraints())
 	fmt.Printf("[plonk] Number of public inputs: %d\n", ccs.GetNbPublicVariables())
 	fmt.Printf("[plonk] Number of secret inputs: %d\n", ccs.GetNbSecretVariables())
+	fmt.Printf("[plonk] Circuit commitments: %v", ccs.GetCommitments().CommitmentIndexes())
 
 	// Step 2: Setup (generate proving and verifying keys)
 	fpk, err0 := os.Open(pkPath)
@@ -339,8 +341,8 @@ func sha256Constants(uapi *uints.BinaryField[uints.U32]) []uints.U32 {
 	return res
 }
 
-// hashBytesToElement converts 32 bytes (SHA256 output) to an emulated P256Fr field element
-func hashBytesToElement(api frontend.API, scalarApi *emulated.Field[emulated.P256Fr], hashBytes []uints.U8) *emulated.Element[emulated.P256Fr] {
+// HashBytesToElement converts 32 bytes (SHA256 output) to an emulated P256Fr field element
+func HashBytesToElement(api frontend.API, scalarApi *emulated.Field[emulated.P256Fr], hashBytes []uints.U8) *emulated.Element[emulated.P256Fr] {
 	// Convert each byte to 8 bits, MSB first (big-endian)
 	var bits []frontend.Variable
 

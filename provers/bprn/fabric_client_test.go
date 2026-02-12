@@ -1,19 +1,20 @@
-package mychannel0
+package bprn
 
 import (
 	"encoding/json"
 	"fmt"
 	"testing"
 
-	"github.com/kysee/zk-chains/provers/bprn"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBlock(t *testing.T) {
-	client, err := bprn.NewFabricClient("./connection-profile.json")
+	client, err := NewFabricClient("./localchannel0/connection-profile.json")
 	require.NoError(t, err)
 
-	block, err := client.GetBlockByNumber("mychannel0", "User1", "peerOrg1", 1)
+	block, err := client.GetBlockByNumber("bpn", "User1", "peerOrg1", 1,
+		ledger.WithTargetEndpoints("peer0.org1.bc"))
 	require.NoError(t, err)
 
 	jsonBlock, err := json.MarshalIndent(block, "", "  ")

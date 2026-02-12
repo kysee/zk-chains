@@ -13,8 +13,6 @@ import (
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/math/emulated"
-	ecdsaCircuit "github.com/consensys/gnark/std/signature/ecdsa"
 	"github.com/kysee/zk-chains/circuits"
 	"github.com/kysee/zk-chains/provers/types"
 	types2 "github.com/kysee/zk-chains/types"
@@ -155,23 +153,23 @@ func (p *AggregateMsgHProver) generateSingleProof(input MsgHProofInput) (groth16
 		return nil, nil, fmt.Errorf("signing failed: %w", err)
 	}
 
-	r, s, err := types.ParseDERSignature(sigDER)
+	_, _, _ = types.ParseDERSignature(sigDER)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse signature failed: %w", err)
 	}
 
 	// Create circuit assignment
 	assignment := circuits.BPrNEventProofCircuit{
-		OriginPayloadH: circuits.ToU8Array32(input.PreH[:]),
-		EventPayloadH:  circuits.ToU8Array32(input.TargetH[:]),
-		Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
-			X: emulated.ValueOf[emulated.P256Fp](input.PrivKey.PublicKey.X),
-			Y: emulated.ValueOf[emulated.P256Fp](input.PrivKey.PublicKey.Y),
-		},
-		Sig: ecdsaCircuit.Signature[emulated.P256Fr]{
-			R: emulated.ValueOf[emulated.P256Fr](r),
-			S: emulated.ValueOf[emulated.P256Fr](s),
-		},
+		//OriginPayloadH: circuits.ToU8Array32(input.PreH[:]),
+		//EventPayloadH:  circuits.ToU8Array32(input.TargetH[:]),
+		//Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
+		//	X: emulated.ValueOf[emulated.P256Fp](input.PrivKey.PublicKey.X),
+		//	Y: emulated.ValueOf[emulated.P256Fp](input.PrivKey.PublicKey.Y),
+		//},
+		//Sig: ecdsaCircuit.Signature[emulated.P256Fr]{
+		//	R: emulated.ValueOf[emulated.P256Fr](r),
+		//	S: emulated.ValueOf[emulated.P256Fr](s),
+		//},
 	}
 
 	// Create witness

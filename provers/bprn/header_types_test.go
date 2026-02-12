@@ -1,4 +1,4 @@
-package mychannel0
+package bprn
 
 import (
 	"fmt"

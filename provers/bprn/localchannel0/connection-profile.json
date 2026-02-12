@@ -1,0 +1,72 @@
+{
+  "name": "bpn",
+  "version": "1.0.0",
+  "network": {
+    "commitTimeoutSeconds": 20,
+    "endorsementPolicyCount": 2,
+    "ordererRetryCount": 5,
+    "ordererRetryWaitTimeMs": 900
+  },
+  "clients": [
+    {
+      "organization": "Org1",
+      "mspId": "Org1MSP",
+      "id": "User1@org1.bc",
+      "privateKeyPath": "localchannel0/crypto-config/peerOrganizations/org1.bc/users/User1@org1.bc/msp/keystore/priv_sk",
+      "signedCertPath": "localchannel0/crypto-config/peerOrganizations/org1.bc/users/User1@org1.bc/msp/signcerts/User1@org1.bc-cert.pem"
+    }
+  ],
+  "channels": {
+    "bpn": {
+      "peers": {
+        "peer0.org1.bc": {
+          "endorsingPeer": true,
+          "chaincodeQuery": true,
+          "ledgerQuery": true,
+          "eventSource": true
+        }
+      },
+      "orderers": ["orderer0.ordererorg.bc"]
+    }
+  },
+  "organizations": {
+    "peerOrg1": {
+      "mspid": "Org1MSP",
+      "peers": ["peer0.org1.bc"]
+    },
+    "OrdererOrg": {
+      "orderers": ["orderer0.ordererorg.bc"]
+    }
+  },
+  "orderers": {
+    "orderer0.ordererorg.bc": {
+      "mspid": "OrdererMSP",
+      "url": "grpcs://orderer0.ordererorg.bc:7050",
+      "operationPort": "8443",
+      "grpcOptions": {
+        "ssl-target-name-override": "orderer0.ordererorg.bc",
+        "hostnameOverride": "orderer0.ordererorg.bc",
+        "grpc-wait-for-ready-timeout": 3000,
+        "request-timeout": 3000
+      },
+      "tlsCACerts": {
+        "path": "localchannel0/crypto-config/ordererOrganizations/ordererorg.bc/orderers/orderer0.ordererorg.bc/tls/ca.crt"
+      }
+    }
+  },
+  "peers": {
+    "peer0.org1.bc": {
+      "url": "grpcs://peer0.org1.bc:7051",
+      "operationPort": "9443",
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.org1.bc",
+        "hostnameOverride": "peer0.org1.bc",
+        "grpc-wait-for-ready-timeout": 3500,
+        "request-timeout": 3500
+      },
+      "tlsCACerts": {
+        "path": "localchannel0/crypto-config/peerOrganizations/org1.bc/peers/peer0.org1.bc/tls/ca.crt"
+      }
+    }
+  }
+}

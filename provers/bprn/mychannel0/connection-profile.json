@@ -12,8 +12,8 @@
       "organization": "Org1",
       "mspId": "Org1MSP",
       "id": "User1@org1.example.com",
-      "privateKeyPath": "crypto-config/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore/priv_sk",
-      "signedCertPath": "crypto-config/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/User1@org1.example.com-cert.pem"
+      "privateKeyPath": "mychannel0/crypto-config/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/keystore/priv_sk",
+      "signedCertPath": "mychannel0/crypto-config/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp/signcerts/User1@org1.example.com-cert.pem"
     }
   ],
   "channels": {
@@ -50,7 +50,7 @@
         "request-timeout": 3000
       },
       "tlsCACerts": {
-        "path": "crypto-config/ordererOrganizations/example.com/orderers/orderer0.example.com/tls/ca.crt"
+        "path": "mychannel0/crypto-config/ordererOrganizations/example.com/orderers/orderer0.example.com/tls/ca.crt"
       }
     }
   },
@@ -65,7 +65,7 @@
         "request-timeout": 3500
       },
       "tlsCACerts": {
-        "path": "crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
+        "path": "mychannel0/crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
       }
     }
   }

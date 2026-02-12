@@ -129,10 +129,25 @@ func (c *FabricClient) SDK() *fabsdk.FabricSDK {
 	return c.sdk
 }
 
+// GetBlockchainHeight returns the current blockchain height (number of blocks) for the specified channel
+func (c *FabricClient) GetBlockchainHeight(channelID string, userName string, orgName string, opts ...ledger.RequestOption) (uint64, error) {
+	ctxProvider := c.sdk.ChannelContext(channelID, fabsdk.WithUser(userName), fabsdk.WithOrg(orgName))
+
+	ledgerClient, err := ledger.New(ctxProvider)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create ledger client: %w", err)
+	}
+
+	resp, err := ledgerClient.QueryInfo(opts...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query blockchain info: %w", err)
+	}
+
+	return resp.BCI.Height, nil
+}
+
 // GetBlockByNumber queries a block by its number from the specified channel
-func (c *FabricClient) GetBlockByNumber(channelID string, userName string, orgName string, blockNumber uint64) (*common.Block, error) {
-	// Create a ledger client context
-	// Note: You might need to adjust WithUser and WithOrg depending on your configuration
+func (c *FabricClient) GetBlockByNumber(channelID string, userName string, orgName string, blockNumber uint64, opts ...ledger.RequestOption) (*common.Block, error) {
 	ctxProvider := c.sdk.ChannelContext(channelID, fabsdk.WithUser(userName), fabsdk.WithOrg(orgName))
 
 	ledgerClient, err := ledger.New(ctxProvider)
@@ -140,8 +155,7 @@ func (c *FabricClient) GetBlockByNumber(channelID string, userName string, orgNa
 		return nil, fmt.Errorf("failed to create ledger client: %w", err)
 	}
 
-	// Query the block
-	block, err := ledgerClient.QueryBlock(blockNumber)
+	block, err := ledgerClient.QueryBlock(blockNumber, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query block %d: %w", blockNumber, err)
 	}

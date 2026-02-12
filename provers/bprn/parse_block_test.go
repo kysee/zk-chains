@@ -15,30 +15,30 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
-	"github.com/hyperledger/fabric-protos-go/ledger/rwset"
-	"github.com/hyperledger/fabric-protos-go/ledger/rwset/kvrwset"
 	"github.com/hyperledger/fabric-protos-go/msp"
 	"github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
 	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/event"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
-	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fab/events/deliverclient/seek"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
-	"github.com/kysee/zk-chains/provers/types"
 	"github.com/stretchr/testify/require"
 )
 
 // ordererPubKeys stores orderer public keys parsed from config blocks.
 var ordererPubKeys []*ecdsa.PublicKey
 
-func TestTxType(t *testing.T) {
+// endorserPubKeys stores endorser public keys parsed from config blocks.
+var endorserPubKeys []*ecdsa.PublicKey
+
+func TestParseBlock0(t *testing.T) {
 	client, err := NewFabricClient("./localchannel0/connection-profile.json")
 	require.NoError(t, err)
 
-	// Reset global orderer public keys
+	// Reset global public keys
 	ordererPubKeys = nil
+	endorserPubKeys = nil
 
 	targetOpt := ledger.WithTargetEndpoints("peer0.org1.bc")
 
@@ -238,172 +238,6 @@ func TestEventClient(t *testing.T) {
 	}
 }
 
-func TestGetTx(t *testing.T) {
-	client, err := NewFabricClient("./connection-profile.json")
-	require.NoError(t, err)
-	defer client.Close()
-
-	channelID := "mychannel0"
-	userName := "User1"
-	orgName := "peerOrg1"
-	txID := "1d1611baa77ac2baa2779fc95f4d7a112abd629796e302f94a08a894d007e487"
-
-	// Create ledger client
-	ctxProvider := client.SDK().ChannelContext(channelID,
-		fabsdk.WithUser(userName),
-		fabsdk.WithOrg(orgName))
-
-	ledgerClient, err := ledger.New(ctxProvider)
-	require.NoError(t, err)
-
-	// Query transaction by txID
-	processedTx, err := ledgerClient.QueryTransaction(fab.TransactionID(txID))
-	require.NoError(t, err)
-
-	fmt.Printf("=== Transaction: %s ===\n", txID)
-	fmt.Printf("Validation Code: %d\n", processedTx.ValidationCode)
-
-	// Parse the transaction envelope
-	envelope := processedTx.TransactionEnvelope
-	payload := &common.Payload{}
-	err = proto.Unmarshal(envelope.Payload, payload)
-	require.NoError(t, err)
-
-	// Parse channel header
-	channelHeader := &common.ChannelHeader{}
-	err = proto.Unmarshal(payload.Header.ChannelHeader, channelHeader)
-	require.NoError(t, err)
-
-	fmt.Printf("Channel ID: %s\n", channelHeader.ChannelId)
-	fmt.Printf("TxID: %s\n", channelHeader.TxId)
-	fmt.Printf("Timestamp: %v\n", channelHeader.Timestamp)
-	fmt.Printf("Type: %s\n", common.HeaderType(channelHeader.Type).String())
-
-	// Parse signature header (creator)
-	signatureHeader := &common.SignatureHeader{}
-	err = proto.Unmarshal(payload.Header.SignatureHeader, signatureHeader)
-	require.NoError(t, err)
-	fmt.Printf("Creator: %s\n", getSubjectFromCert(signatureHeader.Creator))
-
-	// If it's an endorser transaction, parse the details
-	if common.HeaderType(channelHeader.Type) == common.HeaderType_ENDORSER_TRANSACTION {
-		transaction := &peer.Transaction{}
-		err = proto.Unmarshal(payload.Data, transaction)
-		require.NoError(t, err)
-
-		for i, action := range transaction.Actions {
-			fmt.Printf("\n--- Action[%d] ---\n", i)
-
-			actionPayload := &peer.ChaincodeActionPayload{}
-			err = proto.Unmarshal(action.Payload, actionPayload)
-			require.NoError(t, err)
-
-			// Parse chaincode proposal payload
-			chaincodeProposalPayload := &peer.ChaincodeProposalPayload{}
-			err = proto.Unmarshal(actionPayload.ChaincodeProposalPayload, chaincodeProposalPayload)
-			require.NoError(t, err)
-
-			// Parse chaincode invocation spec
-			chaincodeInvocationSpec := &peer.ChaincodeInvocationSpec{}
-			err = proto.Unmarshal(chaincodeProposalPayload.Input, chaincodeInvocationSpec)
-			require.NoError(t, err)
-
-			if chaincodeInvocationSpec.ChaincodeSpec != nil {
-				fmt.Printf("Chaincode: %s\n", chaincodeInvocationSpec.ChaincodeSpec.ChaincodeId.Name)
-				if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 0 {
-					fmt.Printf("Function: %s\n", string(chaincodeInvocationSpec.ChaincodeSpec.Input.Args[0]))
-					fmt.Printf("Args:\n")
-					for j, arg := range chaincodeInvocationSpec.ChaincodeSpec.Input.Args[1:] {
-						fmt.Printf("  [%d]: %s\n", j+1, string(arg))
-					}
-				}
-			}
-
-			// Parse proposal response payload
-			proposalResponsePayload := &peer.ProposalResponsePayload{}
-			err = proto.Unmarshal(actionPayload.Action.ProposalResponsePayload, proposalResponsePayload)
-			require.NoError(t, err)
-
-			// Parse chaincode action
-			chaincodeAction := &peer.ChaincodeAction{}
-			err = proto.Unmarshal(proposalResponsePayload.Extension, chaincodeAction)
-			require.NoError(t, err)
-
-			fmt.Printf("Response Status: %d\n", chaincodeAction.Response.Status)
-			if len(chaincodeAction.Response.Payload) > 0 {
-				fmt.Printf("Response Payload: %s\n", string(chaincodeAction.Response.Payload))
-			}
-
-			fmt.Printf("Results: %d\n", len(chaincodeAction.Results))
-			txRwSet := &rwset.TxReadWriteSet{}
-			err = proto.Unmarshal(chaincodeAction.Results, txRwSet)
-			for _, nsrwset := range txRwSet.NsRwset {
-				fmt.Printf("\tNamespace: %s\n", nsrwset.Namespace)
-
-				// Parse KVRWSet
-				kvRwSet := &kvrwset.KVRWSet{}
-				err = proto.Unmarshal(nsrwset.Rwset, kvRwSet)
-				if err == nil {
-					if len(kvRwSet.Reads) > 0 {
-						fmt.Printf("\tReads: %d\n", len(kvRwSet.Reads))
-						for _, read := range kvRwSet.Reads {
-							if read.Version != nil {
-								fmt.Printf("\t\tKey: %s, Version: [BlockNum:%d, TxNum:%d]\n",
-									read.Key, read.Version.BlockNum, read.Version.TxNum)
-							} else {
-								fmt.Printf("\t\tKey: %s, Version: nil\n", read.Key)
-							}
-						}
-					}
-
-					if len(kvRwSet.Writes) > 0 {
-						fmt.Printf("\tWrites: %d\n", len(kvRwSet.Writes))
-						for _, write := range kvRwSet.Writes {
-							valueStr := string(write.Value)
-							//if len(valueStr) > 100 {
-							//	valueStr = valueStr[:100] + "..."
-							//}
-							fmt.Printf("\t\tKey: %s, IsDelete: %v, Value: %s\n",
-								write.Key, write.IsDelete, valueStr)
-						}
-					}
-				}
-			}
-
-			// Parse chaincode events
-			fmt.Printf("Event: %d\n", len(chaincodeAction.Events))
-			if len(chaincodeAction.Events) > 0 {
-				chaincodeEvent := &peer.ChaincodeEvent{}
-				err = proto.Unmarshal(chaincodeAction.Events, chaincodeEvent)
-				if err == nil {
-					fmt.Printf("Event Chaincode: %s\n", chaincodeEvent.ChaincodeId)
-					fmt.Printf("Event Type: %s\n", chaincodeEvent.EventName)
-					fmt.Printf("Event TxId: %s\n", chaincodeEvent.TxId)
-					fmt.Printf("Event Payload: %s\n", string(chaincodeEvent.Payload))
-				}
-			}
-
-			// Print endorsers
-			fmt.Printf("Endorsers: %d\n", len(actionPayload.Action.Endorsements))
-			for j, endorsement := range actionPayload.Action.Endorsements {
-				fmt.Printf("  [%d]: %s\n", j, getSubjectFromCert(endorsement.Endorser))
-				fmt.Printf("      Signature: (%d bytes) %x\n", len(endorsement.Signature), endorsement.Signature)
-
-				// Decode ECDSA signature (DER format) to get R, S values
-				r, s, err := decodeECDSASignature(endorsement.Signature)
-				require.NoError(t, err)
-				fmt.Printf("      R: %s\n", r.Text(16))
-				fmt.Printf("      S: %s\n", s.Text(16))
-
-				pubKey, err := types.PubkeyFromCert(endorsement.Endorser)
-				require.NoError(t, err)
-				msgh := sha256.Sum256(append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...))
-				require.True(t, ecdsa.Verify(pubKey, msgh[:], r, s))
-			}
-		}
-	}
-}
-
 func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 	fmt.Println("  Type: CONFIG - Channel configuration")
 
@@ -416,8 +250,8 @@ func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 		return
 	}
 
-	fmt.Printf("  Sequence: %d\n", configEnvelope.Config.Sequence)
-
+	//fmt.Printf("  Sequence: %d\n", configEnvelope.Config.Sequence)
+	//
 	if configEnvelope.Config.ChannelGroup != nil {
 		fmt.Printf("  Channel Groups: %v\n", getConfigGroupNames(configEnvelope.Config.ChannelGroup))
 	}
@@ -454,53 +288,71 @@ func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 			fmt.Printf("    Host: %s\n", consenter.Host)
 			fmt.Printf("    Port: %d\n", consenter.Port)
 
-			// Parse ServerTlsCert
-			if pk := parseCertWithLabel("Server TLS Cert", consenter.ServerTlsCert); pk != nil {
-				ordererPubKeys = append(ordererPubKeys, pk)
-			}
-
-			// Parse ClientTlsCert
-			if pk := parseCertWithLabel("Client TLS Cert", consenter.ClientTlsCert); pk != nil {
-				ordererPubKeys = append(ordererPubKeys, pk)
-			}
+			//// Parse ServerTlsCert
+			//if pk := parseCertWithLabel("Server TLS Cert", consenter.ServerTlsCert); pk != nil {
+			//	ordererPubKeys = append(ordererPubKeys, pk)
+			//}
+			//
+			//// Parse ClientTlsCert
+			//if pk := parseCertWithLabel("Client TLS Cert", consenter.ClientTlsCert); pk != nil {
+			//	ordererPubKeys = append(ordererPubKeys, pk)
+			//}
 		}
 	}
 
-	// Parse orderer org MSP certificates
-	for orgName, orgGroup := range ordererGroup.Groups {
-		mspValue, ok := orgGroup.Values["MSP"]
+	// Extract endorser public keys from Application group Policies["Endorsement"]
+	appGroup, ok := configEnvelope.Config.ChannelGroup.Groups["Application"]
+	if !ok {
+		fmt.Println("  No Application group found")
+		return
+	}
+
+	// Reset endorserPubKeys - rebuild from current config
+	endorserPubKeys = nil
+
+	for orgName, orgGroup := range appGroup.Groups {
+		endorsementPolicy, ok := orgGroup.Policies["Endorsement"]
 		if !ok {
+			fmt.Printf("\n  === Endorser Org: %s - No Endorsement policy ===\n", orgName)
 			continue
 		}
 
-		mspConfig := &msp.MSPConfig{}
-		err = proto.Unmarshal(mspValue.Value, mspConfig)
-		require.NoError(t, err)
+		fmt.Printf("\n  === Endorser Org: %s (Policy Type: %d) ===\n", orgName, endorsementPolicy.Policy.Type)
 
-		fabricMSPConfig := &msp.FabricMSPConfig{}
-		err = proto.Unmarshal(mspConfig.Config, fabricMSPConfig)
-		require.NoError(t, err)
+		// Type 1 = SIGNATURE policy
+		if endorsementPolicy.Policy.Type == 1 {
+			sigPolicyEnv := &common.SignaturePolicyEnvelope{}
+			err = proto.Unmarshal(endorsementPolicy.Policy.Value, sigPolicyEnv)
+			require.NoError(t, err)
 
-		fmt.Printf("\n  === Orderer Org MSP: %s (%s) ===\n", orgName, fabricMSPConfig.Name)
+			fmt.Printf("    Identities: %d\n", len(sigPolicyEnv.Identities))
 
-		for j, certBytes := range fabricMSPConfig.RootCerts {
-			if pk := parseCertWithLabel(fmt.Sprintf("Root Cert[%d]", j), certBytes); pk != nil {
-				ordererPubKeys = append(ordererPubKeys, pk)
-			}
-		}
-		for j, certBytes := range fabricMSPConfig.TlsRootCerts {
-			if pk := parseCertWithLabel(fmt.Sprintf("TLS Root Cert[%d]", j), certBytes); pk != nil {
-				ordererPubKeys = append(ordererPubKeys, pk)
-			}
-		}
-		for j, certBytes := range fabricMSPConfig.Admins {
-			if pk := parseCertWithLabel(fmt.Sprintf("Admin Cert[%d]", j), certBytes); pk != nil {
-				ordererPubKeys = append(ordererPubKeys, pk)
+			for i, identity := range sigPolicyEnv.Identities {
+				fmt.Printf("    Identity[%d]: Classification=%s\n", i, identity.PrincipalClassification.String())
+
+				switch identity.PrincipalClassification {
+				case msp.MSPPrincipal_IDENTITY:
+					// Principal contains SerializedIdentity with actual certificate
+					serializedIdentity := &msp.SerializedIdentity{}
+					err = proto.Unmarshal(identity.Principal, serializedIdentity)
+					require.NoError(t, err)
+
+					fmt.Printf("      MSP ID: %s\n", serializedIdentity.Mspid)
+					if pk := parseCertWithLabel(fmt.Sprintf("Endorser Identity[%d]", i), serializedIdentity.IdBytes); pk != nil {
+						endorserPubKeys = append(endorserPubKeys, pk)
+					}
+
+				case msp.MSPPrincipal_ROLE:
+					mspRole := &msp.MSPRole{}
+					err = proto.Unmarshal(identity.Principal, mspRole)
+					require.NoError(t, err)
+					fmt.Printf("      MSP ID: %s, Role: %s\n", mspRole.MspIdentifier, mspRole.Role.String())
+				}
 			}
 		}
 	}
 
-	fmt.Printf("\n  Total stored orderer public keys: %d\n", len(ordererPubKeys))
+	fmt.Printf("\n  Total stored endorser public keys: %d\n", len(endorserPubKeys))
 }
 
 func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
@@ -633,14 +485,7 @@ func verifyBlockSignature(t *testing.T, block *common.Block) {
 		err = proto.Unmarshal(sigHdr.Creator, serializedIdentity)
 		require.NoError(t, err)
 
-		certBlock, _ := pem.Decode(serializedIdentity.IdBytes)
-		require.NotNil(t, certBlock)
-
-		signerCert, err := x509.ParseCertificate(certBlock.Bytes)
-		require.NoError(t, err)
-
-		pubKey, ok := signerCert.PublicKey.(*ecdsa.PublicKey)
-		require.True(t, ok, "signer's public key is not ECDSA")
+		pubKey := parseCertWithLabel("orderer MSP certificate", serializedIdentity.IdBytes)
 
 		// Construct the signed message: metadata.Value || signatureHeader || blockHeaderBytes(ASN.1)
 		msg := make([]byte, 0, len(metadata.Value)+len(metadataSig.SignatureHeader)+len(blockHeaderBytes))
@@ -667,21 +512,6 @@ func verifyBlockSignature(t *testing.T, block *common.Block) {
 
 		fmt.Printf("  Signature[%d]: valid=%v, knownOrderer=%v\n", i, valid, isKnown)
 		fmt.Printf("    MSP ID: %s\n", serializedIdentity.Mspid)
-		fmt.Printf("    Subject: %s\n", signerCert.Subject.String())
-		fmt.Printf("    Serial Number: %s\n", signerCert.SerialNumber.Text(16))
-		if len(signerCert.Subject.OrganizationalUnit) > 0 {
-			fmt.Printf("    OU: %v\n", signerCert.Subject.OrganizationalUnit)
-		}
-		if len(signerCert.DNSNames) > 0 {
-			fmt.Printf("    DNS Names: %v\n", signerCert.DNSNames)
-		}
-		fmt.Printf("    IsCA: %v\n", signerCert.IsCA)
-		fmt.Printf("    Key Usage: %s\n", keyUsageToString(signerCert.KeyUsage))
-		if len(signerCert.ExtKeyUsage) > 0 {
-			fmt.Printf("    Ext Key Usage: %s\n", extKeyUsageToString(signerCert.ExtKeyUsage))
-		}
-		fmt.Printf("    Public Key X: %s\n", hex.EncodeToString(pubKey.X.Bytes()))
-		fmt.Printf("    Public Key Y: %s\n", hex.EncodeToString(pubKey.Y.Bytes()))
 
 		// Also store orderer signing key if not already known
 		if !isKnown {
@@ -743,17 +573,17 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 		require.NoError(t, err)
 		//printJson(fmt.Sprintf("envelop.payload.data(transaction).actions[%d].payload.chaincode_proposal_payload.input", j), chaincodeInvocationSpec)
 
-		if err == nil && chaincodeInvocationSpec.ChaincodeSpec != nil {
-			fmt.Printf("\tChaincode: %s\n", chaincodeInvocationSpec.ChaincodeSpec.ChaincodeId.Name)
-			if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 0 {
-				if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 1 {
-					fmt.Printf("\tArgs:\n")
-					for k := 0; k < len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args); k++ {
-						fmt.Printf("\t\t[%d]: %s\n", k, string(chaincodeInvocationSpec.ChaincodeSpec.Input.Args[k]))
-					}
-				}
-			}
-		}
+		//if err == nil && chaincodeInvocationSpec.ChaincodeSpec != nil {
+		//	fmt.Printf("\tChaincode: %s\n", chaincodeInvocationSpec.ChaincodeSpec.ChaincodeId.Name)
+		//	if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 0 {
+		//		if len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args) > 1 {
+		//			fmt.Printf("\tArgs:\n")
+		//			for k := 0; k < len(chaincodeInvocationSpec.ChaincodeSpec.Input.Args); k++ {
+		//				fmt.Printf("\t\t[%d]: %s\n", k, string(chaincodeInvocationSpec.ChaincodeSpec.Input.Args[k]))
+		//			}
+		//		}
+		//	}
+		//}
 
 		// Parse ProposalResponsePayload
 		proposalResponsePayload := &peer.ProposalResponsePayload{}
@@ -814,10 +644,43 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 		//}
 		//
 		//fmt.Printf("\tEvent: %s\n", string(chaincodeAction.Events))
-		//
-		//for _, endorser := range actionPayload.Action.Endorsements {
-		//	fmt.Println("endorser", getSubjectFromCert(endorser.Endorser))
-		//}
+
+		// Verify endorsement signatures
+		fmt.Printf("  Endorsements: %d\n", len(actionPayload.Action.Endorsements))
+		for i, endorsement := range actionPayload.Action.Endorsements {
+			// Parse endorser's identity
+			serializedIdentity := &msp.SerializedIdentity{}
+			err = proto.Unmarshal(endorsement.Endorser, serializedIdentity)
+			require.NoError(t, err)
+
+			pubKey := parseCertWithLabel(fmt.Sprintf("Endorser[%d] certificate", i), serializedIdentity.IdBytes)
+			if pubKey == nil {
+				fmt.Printf("  Endorsement[%d]: failed to parse endorser certificate\n", i)
+				continue
+			}
+
+			// Signed message = ProposalResponsePayload bytes || Endorser bytes
+			msg := append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...)
+			msgHash := sha256.Sum256(msg)
+
+			// Decode and verify ECDSA signature
+			r, s, err := decodeECDSASignature(endorsement.Signature)
+			require.NoError(t, err)
+
+			valid := ecdsa.Verify(pubKey, msgHash[:], r, s)
+
+			// Check if endorser's key matches any stored endorser public key
+			isKnown := false
+			for _, storedKey := range endorserPubKeys {
+				if storedKey.X.Cmp(pubKey.X) == 0 && storedKey.Y.Cmp(pubKey.Y) == 0 {
+					isKnown = true
+					break
+				}
+			}
+			fmt.Printf("  Endorsement[%d]: valid=%v, knownEndorser=%v, MSP=%s\n", i, valid, isKnown, serializedIdentity.Mspid)
+			require.True(t, valid)
+			require.True(t, isKnown)
+		}
 		//
 		////// Output detailed JSON for this action
 		////fmt.Println("\n  === Action JSON Output ===")

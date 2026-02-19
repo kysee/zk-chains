@@ -289,7 +289,7 @@ func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 			fmt.Printf("    Port: %d\n", consenter.Port)
 
 			// Parse ServerTlsCert
-			if pk := parseCertWithLabel("Server TLS Cert", consenter.ServerTlsCert); pk != nil {
+			if _, pk := parseCertWithLabel("Server TLS Cert", consenter.ServerTlsCert); pk != nil {
 				ordererPubKeys = append(ordererPubKeys, pk)
 			}
 			//
@@ -338,7 +338,7 @@ func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 					require.NoError(t, err)
 
 					fmt.Printf("      MSP ID: %s\n", serializedIdentity.Mspid)
-					if pk := parseCertWithLabel(fmt.Sprintf("Endorser Identity[%d]", i), serializedIdentity.IdBytes); pk != nil {
+					if _, pk := parseCertWithLabel(fmt.Sprintf("Endorser Identity[%d]", i), serializedIdentity.IdBytes); pk != nil {
 						endorserPubKeys = append(endorserPubKeys, pk)
 					}
 
@@ -355,9 +355,9 @@ func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 	fmt.Printf("\n  Total stored endorser public keys: %d\n", len(endorserPubKeys))
 }
 
-func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
+func parseCertWithLabel(label string, certPEM []byte) (*x509.Certificate, *ecdsa.PublicKey) {
 	if len(certPEM) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	fmt.Printf("\n%v\n", string(certPEM))
@@ -365,13 +365,13 @@ func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		fmt.Printf("    %s: failed to decode PEM\n", label)
-		return nil
+		return nil, nil
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		fmt.Printf("    %s: failed to parse certificate: %v\n", label, err)
-		return nil
+		return nil, nil
 	}
 
 	fmt.Printf("    %s:\n", label)
@@ -392,10 +392,10 @@ func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
 	if pubKey, ok := cert.PublicKey.(*ecdsa.PublicKey); ok {
 		fmt.Printf("      Public Key X: %s\n", hex.EncodeToString(pubKey.X.Bytes()))
 		fmt.Printf("      Public Key Y: %s\n", hex.EncodeToString(pubKey.Y.Bytes()))
-		return pubKey
+		return cert, pubKey
 	} else {
 		fmt.Printf("      Public Key: (not ECDSA)\n")
-		return nil
+		return nil, nil
 	}
 }
 
@@ -489,7 +489,7 @@ func verifyBlockSignature(t *testing.T, block *common.Block) {
 		err = proto.Unmarshal(sigHdr.Creator, serializedIdentity)
 		require.NoError(t, err)
 
-		pubKey := parseCertWithLabel("orderer MSP certificate", serializedIdentity.IdBytes)
+		_, pubKey := parseCertWithLabel("orderer MSP certificate", serializedIdentity.IdBytes)
 
 		// Construct the signed message: metadata.Value || signatureHeader || blockHeaderBytes(ASN.1)
 		msg := make([]byte, 0, len(metadata.Value)+len(metadataSig.SignatureHeader)+len(blockHeaderBytes))
@@ -657,7 +657,7 @@ func parseEndorserTransaction(t *testing.T, payload *common.Payload) {
 			err = proto.Unmarshal(endorsement.Endorser, serializedIdentity)
 			require.NoError(t, err)
 
-			pubKey := parseCertWithLabel(fmt.Sprintf("Endorser[%d] certificate", i), serializedIdentity.IdBytes)
+			_, pubKey := parseCertWithLabel(fmt.Sprintf("Endorser[%d] certificate", i), serializedIdentity.IdBytes)
 			if pubKey == nil {
 				fmt.Printf("  Endorsement[%d]: failed to parse endorser certificate\n", i)
 				continue

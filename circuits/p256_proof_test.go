@@ -28,12 +28,10 @@ func TestP256ProofCircuit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create message and hash it
-	h0 := sha256.Sum256([]byte("other message"))
 	msgH := sha256.Sum256([]byte("target message"))
-	signInput := sha256.Sum256(append(h0[:], msgH[:]...))
 
 	// Sign the hash
-	sigDER, err := privKey.Sign(rand.Reader, signInput[:], nil)
+	sigDER, err := privKey.Sign(rand.Reader, msgH[:], nil)
 	require.NoError(t, err)
 
 	// Parse DER signature to get R and S
@@ -41,7 +39,7 @@ func TestP256ProofCircuit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify signature outside circuit first
-	valid := ecdsa.Verify(&privKey.PublicKey, signInput[:], r, s)
+	valid := ecdsa.Verify(&privKey.PublicKey, msgH[:], r, s)
 	require.True(t, valid, "signature should be valid")
 
 	// Create circuit
@@ -57,7 +55,6 @@ func TestP256ProofCircuit(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](s),
 		},
-		H0:   ToU8Array32(h0[:]),
 		MsgH: ToU8Array32(msgH[:]),
 	}
 
@@ -75,12 +72,10 @@ func TestP256ProofCircuit_InvalidSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create message and hash it
-	h0 := sha256.Sum256([]byte("other message"))
 	msgH := sha256.Sum256([]byte("target message"))
-	signInput := sha256.Sum256(append(h0[:], msgH[:]...))
 
 	// Sign the hash
-	sigDER, err := privKey.Sign(rand.Reader, signInput[:], nil)
+	sigDER, err := privKey.Sign(rand.Reader, msgH[:], nil)
 	require.NoError(t, err)
 
 	// Parse DER signature to get R and S
@@ -103,7 +98,6 @@ func TestP256ProofCircuit_InvalidSignature(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](invalidS), // Invalid!
 		},
-		H0:   ToU8Array32(h0[:]),
 		MsgH: ToU8Array32(msgH[:]),
 	}
 
@@ -121,12 +115,10 @@ func TestP256ProofCircuit_WrongHash(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create message and hash it
-	h0 := sha256.Sum256([]byte("other message"))
 	msgH := sha256.Sum256([]byte("target message"))
-	signInput := sha256.Sum256(append(h0[:], msgH[:]...))
 
 	// Sign the hash
-	sigDER, err := privKey.Sign(rand.Reader, signInput[:], nil)
+	sigDER, err := privKey.Sign(rand.Reader, msgH[:], nil)
 	require.NoError(t, err)
 
 	// Parse DER signature to get R and S
@@ -150,7 +142,6 @@ func TestP256ProofCircuit_WrongHash(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](s),
 		},
-		H0:   ToU8Array32(h0[:]),
 		MsgH: ToU8Array32(wrongHash[:]), // Wrong hash!
 	}
 
@@ -168,12 +159,10 @@ func TestP256ProofCircuit_ProveAndVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create message and hash it
-	h0 := sha256.Sum256([]byte("other message"))
 	msgH := sha256.Sum256([]byte("target message"))
-	signInput := sha256.Sum256(append(h0[:], msgH[:]...))
 
 	// Sign the hash
-	sigDER, err := privKey.Sign(rand.Reader, signInput[:], nil)
+	sigDER, err := privKey.Sign(rand.Reader, msgH[:], nil)
 	require.NoError(t, err)
 
 	// Parse DER signature to get R and S
@@ -181,7 +170,7 @@ func TestP256ProofCircuit_ProveAndVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify signature outside circuit first
-	valid := ecdsa.Verify(&privKey.PublicKey, signInput[:], r, s)
+	valid := ecdsa.Verify(&privKey.PublicKey, msgH[:], r, s)
 	require.True(t, valid, "signature should be valid")
 
 	// Create circuit
@@ -198,7 +187,6 @@ func TestP256ProofCircuit_ProveAndVerify(t *testing.T) {
 			R: emulated.ValueOf[emulated.P256Fr](r),
 			S: emulated.ValueOf[emulated.P256Fr](s),
 		},
-		H0:   ToU8Array32(h0[:]),
 		MsgH: ToU8Array32(msgH[:]),
 	}
 

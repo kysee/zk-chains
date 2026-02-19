@@ -25,6 +25,10 @@ import (
 	"github.com/consensys/gnark/test/unsafekzg"
 )
 
+const (
+	MaxMerkleDepth = 4
+)
+
 func LoadOrSetupCircuit_Groth16(outDir string, c frontend.Circuit) (constraint.ConstraintSystem, groth16.ProvingKey, groth16.VerifyingKey) {
 	var ccs constraint.ConstraintSystem
 	var pk groth16.ProvingKey
@@ -66,7 +70,7 @@ func LoadOrSetupCircuit_Groth16(outDir string, c frontend.Circuit) (constraint.C
 	fmt.Printf("[groth16] Number of constraints: %d\n", ccs.GetNbConstraints())
 	fmt.Printf("[groth16] Number of public inputs: %d\n", ccs.GetNbPublicVariables())
 	fmt.Printf("[groth16] Number of secret inputs: %d\n", ccs.GetNbSecretVariables())
-	fmt.Printf("[groth16] Circuit commitments: %v", ccs.GetCommitments().CommitmentIndexes())
+	fmt.Printf("[groth16] Circuit commitments: %v\n", ccs.GetCommitments().CommitmentIndexes())
 
 	// Step 2: Setup (generate proving and verifying keys)
 	fpk, err0 := os.Open(pkPath)
@@ -151,7 +155,7 @@ func LoadOrSetupCircuit_Plonk(outDir string, c frontend.Circuit) (constraint.Con
 	fmt.Printf("[plonk] Number of constraints: %d\n", ccs.GetNbConstraints())
 	fmt.Printf("[plonk] Number of public inputs: %d\n", ccs.GetNbPublicVariables())
 	fmt.Printf("[plonk] Number of secret inputs: %d\n", ccs.GetNbSecretVariables())
-	fmt.Printf("[plonk] Circuit commitments: %v", ccs.GetCommitments().CommitmentIndexes())
+	fmt.Printf("[plonk] Circuit commitments: %v\n", ccs.GetCommitments().CommitmentIndexes())
 
 	// Step 2: Setup (generate proving and verifying keys)
 	fpk, err0 := os.Open(pkPath)

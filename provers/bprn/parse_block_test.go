@@ -42,7 +42,7 @@ func TestParseBlock0(t *testing.T) {
 
 	targetOpt := ledger.WithTargetEndpoints("peer0.org1.bc")
 
-	height, err := client.GetBlockchainHeight("bpn", "User1", "peerOrg1", targetOpt)
+	height, err := uint64(1), nil //client.GetBlockchainHeight("bpn", "User1", "peerOrg1", targetOpt)
 	require.NoError(t, err)
 	fmt.Printf("Blockchain height: %d (last block: %d)\n", height, height-1)
 
@@ -288,10 +288,10 @@ func parseConfigTransaction(t *testing.T, payload *common.Payload) {
 			fmt.Printf("    Host: %s\n", consenter.Host)
 			fmt.Printf("    Port: %d\n", consenter.Port)
 
-			//// Parse ServerTlsCert
-			//if pk := parseCertWithLabel("Server TLS Cert", consenter.ServerTlsCert); pk != nil {
-			//	ordererPubKeys = append(ordererPubKeys, pk)
-			//}
+			// Parse ServerTlsCert
+			if pk := parseCertWithLabel("Server TLS Cert", consenter.ServerTlsCert); pk != nil {
+				ordererPubKeys = append(ordererPubKeys, pk)
+			}
 			//
 			//// Parse ClientTlsCert
 			//if pk := parseCertWithLabel("Client TLS Cert", consenter.ClientTlsCert); pk != nil {
@@ -360,6 +360,8 @@ func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
 		return nil
 	}
 
+	fmt.Printf("\n%v\n", string(certPEM))
+
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		fmt.Printf("    %s: failed to decode PEM\n", label)
@@ -373,6 +375,7 @@ func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
 	}
 
 	fmt.Printf("    %s:\n", label)
+	fmt.Printf("      Issuer: %s\n", cert.Issuer.String())
 	fmt.Printf("      Subject: %s\n", cert.Subject.String())
 	fmt.Printf("      Serial Number: %s\n", cert.SerialNumber.Text(16))
 	if len(cert.Subject.OrganizationalUnit) > 0 {
@@ -390,9 +393,10 @@ func parseCertWithLabel(label string, certPEM []byte) *ecdsa.PublicKey {
 		fmt.Printf("      Public Key X: %s\n", hex.EncodeToString(pubKey.X.Bytes()))
 		fmt.Printf("      Public Key Y: %s\n", hex.EncodeToString(pubKey.Y.Bytes()))
 		return pubKey
+	} else {
+		fmt.Printf("      Public Key: (not ECDSA)\n")
+		return nil
 	}
-	fmt.Printf("      Public Key: (not ECDSA)\n")
-	return nil
 }
 
 func keyUsageToString(usage x509.KeyUsage) string {

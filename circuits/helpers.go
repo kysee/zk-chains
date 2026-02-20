@@ -395,20 +395,18 @@ func sha256Pair(api frontend.API, left, right [32]uints.U8) [32]uints.U8 {
 	return [32]uints.U8(hashResult)
 }
 
-// VerifyMerkleProof verifies a SHA256-based Merkle proof and returns success as boolean
-// Returns 1 if valid, 0 if invalid (does not fail the circuit)
+// VerifyMerkleProof verifies a SHA256-based Merkle proof
 // Parameters:
+//   - proof: sibling hashes along the path (MaxMerkleDepth elements)
 //   - leafIdx: index of the leaf in the tree (determines left/right direction at each level)
 //   - leaf: the leaf hash (32 bytes)
 //   - root: the expected Merkle root (32 bytes)
-//   - proof: sibling hashes along the path (MaxMerkleDepth elements)
-//   - depth: actual tree depth (must be <= MaxMerkleDepth)
-func VerifyMerkleProof(api frontend.API, leafIdx frontend.Variable, leafHash, root []uints.U8, proof [MaxMerkleDepth][32]uints.U8, depth int) frontend.Variable {
-	indexBits := api.ToBinary(leafIdx, depth)
+func VerifyMerkleProof(api frontend.API, proof [MaxMerkleDepth][32]uints.U8, leafIdx frontend.Variable, leafHash, root []uints.U8) {
+	indexBits := api.ToBinary(leafIdx, MaxMerkleDepth)
 
 	current := [32]uints.U8(leafHash)
 
-	for i := 0; i < depth; i++ {
+	for i := 0; i < MaxMerkleDepth; i++ {
 		sibling := proof[i]
 
 		var left, right [32]uints.U8
@@ -420,15 +418,9 @@ func VerifyMerkleProof(api frontend.API, leafIdx frontend.Variable, leafHash, ro
 		current = sha256Pair(api, left, right)
 	}
 
-	// Check if computed root matches expected root
-	// All bytes must match -> AND all equality checks
-	isValid := frontend.Variable(1)
 	for i := 0; i < 32; i++ {
-		isEqual := api.IsZero(api.Sub(current[i].Val, root[i].Val))
-		isValid = api.And(isValid, isEqual)
+		api.AssertIsEqual(current[i].Val, root[i].Val)
 	}
-
-	return isValid
 }
 
 // ConvertToU8Array32 converts [2]frontend.Variable (high, low 128-bit each) to [32]uints.U8

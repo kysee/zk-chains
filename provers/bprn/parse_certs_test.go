@@ -8,12 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	bprnevt "github.com/beatoz/chaincode-base/event"
+	bprnmerkle "github.com/beatoz/chaincode-base/event/merkle"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/msp"
 	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
 	fabricmsp "github.com/hyperledger/fabric/msp"
+	"github.com/hyperledger/fabric/protoutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -189,6 +192,26 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 		err = proto.Unmarshal(action.Payload, actionPayload)
 		require.NoError(t, err)
 
+		// Parse ProposalResponsePayload
+		proposalResponsePayload, err := protoutil.UnmarshalProposalResponsePayload(actionPayload.Action.ProposalResponsePayload)
+		require.NoError(t, err)
+
+		// Parse ChaincodeAction
+		chaincodeAction, err := protoutil.UnmarshalChaincodeAction(proposalResponsePayload.Extension)
+		require.NoError(t, err)
+
+		ccEvent, err := protoutil.UnmarshalChaincodeEvents(chaincodeAction.Events)
+		require.NoError(t, err)
+
+		evtLogSet, err := bprnevt.UnmarshalEventLogSet(ccEvent.Payload)
+		require.NoError(t, err)
+
+		var evtRoot []byte
+		if evtLogSet.Len() > 0 {
+			logsetTree := bprnmerkle.NewMerkleTree(bprnmerkle.WithILeaves(evtLogSet))
+			evtRoot = logsetTree.Root()
+		}
+
 		// Verify endorsement signatures
 		fmt.Printf("  Endorsements: %d\n", len(actionPayload.Action.Endorsements))
 		for i, endorsement := range actionPayload.Action.Endorsements {
@@ -207,7 +230,7 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 			require.NoError(t, cert.CheckSignatureFrom(issuer))
 
 			// Signed message = ProposalResponsePayload bytes || Endorser bytes
-			msg := append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...)
+			msg := append(evtRoot, append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...)...)
 			msgHash := sha256.Sum256(msg)
 
 			// Decode and verify ECDSA signature

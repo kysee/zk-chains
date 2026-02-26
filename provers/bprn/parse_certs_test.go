@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	bprnevt "github.com/beatoz/chaincode-base/event"
-	bprnmerkle "github.com/beatoz/chaincode-base/event/merkle"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/msp"
@@ -200,16 +199,14 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 		chaincodeAction, err := protoutil.UnmarshalChaincodeAction(proposalResponsePayload.Extension)
 		require.NoError(t, err)
 
-		ccEvent, err := protoutil.UnmarshalChaincodeEvents(chaincodeAction.Events)
-		require.NoError(t, err)
-
-		evtLogSet, err := bprnevt.UnmarshalEventLogSet(ccEvent.Payload)
-		require.NoError(t, err)
-
 		var evtRoot []byte
-		if evtLogSet.Len() > 0 {
-			logsetTree := bprnmerkle.NewMerkleTree(bprnmerkle.WithILeaves(evtLogSet))
-			evtRoot = logsetTree.Root()
+		if chaincodeAction.Events != nil {
+			ccEvent, err := protoutil.UnmarshalChaincodeEvents(chaincodeAction.Events)
+			require.NoError(t, err)
+
+			evtLog, err := bprnevt.UnmarshalEventLog(ccEvent.Payload)
+			require.NoError(t, err)
+			evtRoot = evtLog.Root()
 		}
 
 		// Verify endorsement signatures
@@ -229,8 +226,13 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 			require.True(t, ok)
 			require.NoError(t, cert.CheckSignatureFrom(issuer))
 
-			// Signed message = ProposalResponsePayload bytes || Endorser bytes
-			msg := append(evtRoot, append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...)...)
+			msg := append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...)
+			if evtRoot != nil {
+				// btip-17 signature message = evtRoot + sha256(ProposalResponsePayload bytes) + Endorser bytes
+				prpDigest := sha256.Sum256(actionPayload.Action.ProposalResponsePayload)
+				msg = append(evtRoot, prpDigest[:]...)
+				msg = append(msg, endorsement.Endorser...)
+			}
 			msgHash := sha256.Sum256(msg)
 
 			// Decode and verify ECDSA signature

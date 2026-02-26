@@ -3,7 +3,7 @@ module github.com/kysee/zk-chains
 go 1.24.4
 
 require (
-	github.com/beatoz/chaincode-base v1.0.1
+	github.com/beatoz/chaincode-base v1.0.2
 	github.com/consensys/gnark v0.14.0
 	github.com/consensys/gnark-crypto v0.19.2
 	github.com/ethereum/go-ethereum v1.16.7

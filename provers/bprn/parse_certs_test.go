@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	bprnevt "github.com/beatoz/chaincode-base/event"
+	bprnevt "github.com/beatoz/bprn-sdk-go/chaincodes/event"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/msp"
@@ -157,7 +157,7 @@ func parseConfigCerts(t *testing.T, payload *common.Payload) {
 			fabricNodeOus[identifier], _ = parseCertWithLabel(identifier, fabricMSPConfig.FabricNodeOus.OrdererOuIdentifier.Certificate)
 			for i, pem := range fabricMSPConfig.RootCerts {
 				identifier = fabricMSPConfig.FabricNodeOus.AdminOuIdentifier.OrganizationalUnitIdentifier
-				fabricNodeOus["root"], _ = parseCertWithLabel(fmt.Sprintf("Root Cert[%d]", i), pem)
+				fabricNodeOus["root"], _ = parseCertWithLabel(fmt.Sprintf("EventRoot Cert[%d]", i), pem)
 			}
 		}
 
@@ -207,10 +207,11 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 			evtLog, err := bprnevt.UnmarshalEventLog(ccEvent.Payload)
 			require.NoError(t, err)
 			evtRoot = evtLog.Root()
+			fmt.Println("- EventLog elements length", evtLog.LeavesLen())
 		}
 
 		// Verify endorsement signatures
-		fmt.Printf("  Endorsements: %d\n", len(actionPayload.Action.Endorsements))
+		fmt.Printf("- Endorsements: %d\n", len(actionPayload.Action.Endorsements))
 		for i, endorsement := range actionPayload.Action.Endorsements {
 			// Parse endorser's identity
 			serializedIdentity := &msp.SerializedIdentity{}

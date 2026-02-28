@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	bprnevt "github.com/beatoz/chaincode-base/event"
+	bprnevt "github.com/beatoz/bprn-sdk-go/chaincodes/event"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/std/math/uints"
 	"github.com/consensys/gnark/test"
@@ -15,28 +15,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var evtLogSet bprnevt.EventLogSet
-var logIdx, leafIdx int
+var evtLog *bprnevt.EventLog
+var gidx int
 
 func init() {
-	bprnevt.RegisterEventLogValueType((*bprnevt.PostMessageEventLogValue)(nil))
+	evtLog = bprnevt.NewEventLog("channelId", "chaincodeName", "txId")
 
-	for i := 0; i < 11; i++ {
-		logVal := &bprnevt.PostMessageEventLogValue{
-			SrcChainId: fmt.Sprintf("srcChainId-%d", i),
-			SrcDappId:  fmt.Sprintf("srcDappId-%d", i),
-			SrcAcctId:  fmt.Sprintf("srcAcctId-%d", i),
-			DstChainId: fmt.Sprintf("dstChainId-%d", i),
-			DstDappId:  fmt.Sprintf("dstDappId-%d", i),
-			DstAcctId:  fmt.Sprintf("dstAcctId-%d", i),
-			MsgIdx:     uint64(i * 100),
-			MsgPayload: []byte(fmt.Sprintf("hello world-%d", i)),
-		}
-		evtLogSet = append(evtLogSet, bprnevt.NewEventLog(logVal))
+	log := &bprnevt.PostMessageEventLog{
+		SrcChainId: fmt.Sprintf("srcChainId"),
+		SrcDappId:  fmt.Sprintf("srcDappId"),
+		SrcAcctId:  fmt.Sprintf("srcAcctId"),
+		DstChainId: fmt.Sprintf("dstChainId"),
+		DstDappId:  fmt.Sprintf("dstDappId"),
+		DstAcctId:  fmt.Sprintf("dstAcctId"),
+		MsgIdx:     uint64(123),
+		MsgPayload: []byte(fmt.Sprintf("hello world")),
 	}
-
-	logIdx = rand.IntN(len(evtLogSet))
-	leafIdx = rand.IntN(8)
+	evtLog.AddLeaves(log)
+	gidx = rand.IntN(3 + 8) // 3 header's leaves length + 8 leaf index
 }
 
 func TestBPrNEventProof_Setup_Groth16(t *testing.T) {
@@ -46,88 +42,59 @@ func TestBPrNEventProof_Setup_Groth16(t *testing.T) {
 }
 
 func TestBPrNEventProof(t *testing.T) {
-	witness := buildValidWitness(t, logIdx, leafIdx)
+	witness := buildValidWitness(t, gidx)
 
 	var circuit BPrNEventProofCircuit
 	err := test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
 	require.NoError(t, err)
 
-	t.Logf("BPrNEventProofCircuit test passed (logIdx=%d, leafIdx=%d)", logIdx, leafIdx)
+	t.Logf("BPrNEventProofCircuit test passed (gidx=%d)", gidx)
 }
 
 func TestBPrNEventProof_WrongLeafHash(t *testing.T) {
-	witness := buildValidWitness(t, logIdx, leafIdx)
+	witness := buildValidWitness(t, gidx)
 
-	// Tamper LeafHash: flip a byte
-	witness.LeafHash[0] = uints.NewU8(witness.LeafHash[0].Val.(uint8) ^ 0xff)
-
-	var circuit BPrNEventProofCircuit
-	err := test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
-	require.Error(t, err, "circuit should not be satisfied with wrong LeafHash")
-	t.Log("correctly rejected wrong LeafHash")
-}
-
-func TestBPrNEventProof_WrongLogSetRoot(t *testing.T) {
-	witness := buildValidWitness(t, logIdx, leafIdx)
-
-	// Tamper LogSetRoot: flip a byte
-	witness.LogSetRoot[0] = uints.NewU8(witness.LogSetRoot[0].Val.(uint8) ^ 0xff)
+	// Tamper EventElemHash: flip a byte
+	witness.EventElemHash[0] = uints.NewU8(witness.EventElemHash[0].Val.(uint8) ^ 0xff)
 
 	var circuit BPrNEventProofCircuit
 	err := test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
-	require.Error(t, err, "circuit should not be satisfied with wrong LogSetRoot")
-	t.Log("correctly rejected wrong LogSetRoot")
+	require.Error(t, err, "circuit should not be satisfied with wrong EventElemHash")
+	t.Log("correctly rejected wrong EventElemHash")
 }
 
-func TestBPrNEventProof_WrongLogRoot(t *testing.T) {
-	witness := buildValidWitness(t, logIdx, leafIdx)
+func TestBPrNEventProof_WrongRoot(t *testing.T) {
+	witness := buildValidWitness(t, gidx)
 
-	// Use a different EventLog's root as LogRoot
-	wrongTree := bprnevt.NewMerkleTreeType(evtLogSet[(logIdx+1)%len(evtLogSet)])
-	wrongRoot, err := wrongTree.Root()
-	require.NoError(t, err)
-
-	witness.LogRoot = ToU8Array32(wrongRoot)
+	// Use a different EventLog's root as EventRoot
+	wrongRoot := evtLog.Root()
+	wrongRoot[0] ^= 0xff
+	witness.EventRoot = ToU8Array32(wrongRoot)
 
 	var circuit BPrNEventProofCircuit
-	err = test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
-	require.Error(t, err, "circuit should not be satisfied with wrong LogRoot")
-	t.Log("correctly rejected wrong LogRoot")
+	err := test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
+	require.Error(t, err, "circuit should not be satisfied with wrong EventRoot")
+	t.Log("correctly rejected wrong EventRoot")
 }
 
-// buildValidWitness creates a valid BPrNEventProofCircuit witness for the given logIdx and leafIdx.
-func buildValidWitness(t *testing.T, logIdx, leafIdx int) BPrNEventProofCircuit {
+// buildValidWitness creates a valid BPrNEventProofCircuit witness for the given logIdx and gidx.
+func buildValidWitness(t *testing.T, gidx int) BPrNEventProofCircuit {
 	t.Helper()
 
-	innerTree := bprnevt.NewMerkleTreeType(evtLogSet[logIdx])
-	innerLeaves := evtLogSet[logIdx].Leaves()
-	leafHash := sha256.Sum256(innerLeaves[leafIdx])
-
-	innerProof, err := innerTree.Proof(leafIdx)
+	evtLogRoot := evtLog.Root()
+	_, siblings, err := evtLog.Proof(gidx)
 	require.NoError(t, err)
 
-	logRoot, err := innerTree.Root()
-	require.NoError(t, err)
-
-	outerTree := bprnevt.NewMerkleTreeType(evtLogSet)
-	outerProof, err := outerTree.Proof(logIdx)
-	require.NoError(t, err)
-
-	logSetRoot, err := outerTree.Root()
-	require.NoError(t, err)
+	elem := evtLog.Leaf(gidx)
+	elemHash := sha256.Sum256(elem)
 
 	witness := BPrNEventProofCircuit{
-		LeafIdx:    leafIdx,
-		LeafHash:   ToU8Array32(leafHash[:]),
-		LogRoot:    ToU8Array32(logRoot),
-		LogRootIdx: logIdx,
-		LogSetRoot: ToU8Array32(logSetRoot),
+		EventRoot:     ToU8Array32(evtLogRoot),
+		EventElemIdx:  gidx,
+		EventElemHash: ToU8Array32(elemHash[:]),
 	}
-	for i := 0; i < MaxMerkleDepth && i < len(innerProof); i++ {
-		witness.Siblings[i] = ToU8Array32(innerProof[i])
-	}
-	for i := 0; i < MaxMerkleDepth && i < len(outerProof); i++ {
-		witness.LogRootSiblings[i] = ToU8Array32(outerProof[i])
+	for i := 0; i < MaxMerkleDepth && i < len(siblings); i++ {
+		witness.Siblings[i] = ToU8Array32(siblings[i])
 	}
 	return witness
 }

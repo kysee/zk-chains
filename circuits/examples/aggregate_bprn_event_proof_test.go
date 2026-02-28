@@ -84,7 +84,7 @@ func GenerateInnerProofsParallel(
 			assignment := circuits.BPrNEventProofCircuit{
 				//OriginPayloadH: circuits.ToU8Array32(d.OriginPayloadH[:]),
 				EventPayloadH: circuits.ToU8Array32(d.EventPayloadH[:]),
-				EventLogRoot:  circuits.ToU8Array32(d.EventLogRoot[:]),
+				EventRoot:     circuits.ToU8Array32(d.EventLogRoot[:]),
 				EventElemH:    circuits.ToU8Array32(d.EventElemH[:]),
 				//Pub: ecdsaCircuit.PublicKey[emulated.P256Fp, emulated.P256Fr]{
 				//	X: emulated.ValueOf[emulated.P256Fp](d.PrivKey.PublicKey.X),

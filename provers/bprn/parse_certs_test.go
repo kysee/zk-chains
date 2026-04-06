@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	bprnevt "github.com/beatoz/bprn-sdk-go/chaincodes/event"
+	"github.com/beatoz/bprn-sdk-go/chaincodes/event/merkle"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/msp"
@@ -34,6 +35,8 @@ func TestParseCerts(t *testing.T) {
 	fmt.Printf("Blockchain height: %d (last block: %d)\n", height, height-1)
 
 	for h := uint64(0); h < height; h++ {
+		var evtLogRoots [][]byte
+
 		fmt.Println("======================================================================================================================")
 		block, err := client.GetBlockByNumber("bpn", "User1", "peerOrg1", h, targetOpt)
 		require.NoError(t, err)
@@ -68,7 +71,10 @@ func TestParseCerts(t *testing.T) {
 				parseConfigCerts(t, payload)
 
 			case common.HeaderType_ENDORSER_TRANSACTION:
-				parseEndorserCerts(t, payload)
+				evtLogRoot := parseEndorserCerts(t, payload)
+				if evtLogRoot != nil {
+					evtLogRoots = append(evtLogRoots, evtLogRoot)
+				}
 
 			//case common.HeaderType_ORDERER_TRANSACTION:
 			//	fmt.Println("\t  [ORDERER_TRANSACTION - System transaction]")
@@ -79,6 +85,39 @@ func TestParseCerts(t *testing.T) {
 			default:
 				fmt.Printf("\t  [Unknown/Unhandled type: %d]\n", channelHeader.Type)
 			}
+		}
+
+		// verify commit signature
+		if len(evtLogRoots) > 0 {
+			_tree := merkle.NewMerkleTree(merkle.WithHashedLeaves(evtLogRoots))
+			blockEvtRoot := _tree.Root()
+
+			commitSig := &common.Metadata{}
+			require.NoError(t, proto.Unmarshal(block.Metadata.Metadata[5], commitSig))
+
+			sigHeader := &common.SignatureHeader{}
+			require.NoError(t, proto.Unmarshal(commitSig.Signatures[0].SignatureHeader, sigHeader))
+
+			serializedIdentity := &msp.SerializedIdentity{}
+			require.NoError(t, proto.Unmarshal(sigHeader.Creator, serializedIdentity))
+
+			fmt.Printf("block[%d].block_event_root      : %x\n", block.Header.Number, blockEvtRoot)
+			fmt.Printf("block[%d].block_commit_sig.value: %x\n", block.Header.Number, commitSig.Value)
+			fmt.Printf("block[%d].block_commit_sig.sig  : %x\n", block.Header.Number, commitSig.Signatures[0].Signature)
+			fmt.Printf("block[%d].block_commit_sig.mspid: %s\n", block.Header.Number, serializedIdentity.Mspid)
+			fmt.Printf("block[%d].block_commit_sig.id   : %s\n", block.Header.Number, string(serializedIdentity.IdBytes))
+
+			_, commitPubKey := parseCertWithLabel(
+				fmt.Sprintf("block[%d] commit sig cert", block.Header.Number),
+				serializedIdentity.IdBytes,
+			)
+			require.NotNil(t, commitPubKey)
+
+			msgHash := sha256.Sum256(blockEvtRoot)
+
+			valid := ecdsa.VerifyASN1(commitPubKey, msgHash[:], commitSig.Signatures[0].Signature)
+			fmt.Printf("block[%d].block_commit_sig.valid: %v\n", block.Header.Number, valid)
+			require.True(t, valid)
 		}
 	}
 }
@@ -157,7 +196,7 @@ func parseConfigCerts(t *testing.T, payload *common.Payload) {
 			fabricNodeOus[identifier], _ = parseCertWithLabel(identifier, fabricMSPConfig.FabricNodeOus.OrdererOuIdentifier.Certificate)
 			for i, pem := range fabricMSPConfig.RootCerts {
 				identifier = fabricMSPConfig.FabricNodeOus.AdminOuIdentifier.OrganizationalUnitIdentifier
-				fabricNodeOus["root"], _ = parseCertWithLabel(fmt.Sprintf("EventRoot Cert[%d]", i), pem)
+				fabricNodeOus["root"], _ = parseCertWithLabel(fmt.Sprintf("Root Cert[%d]", i), pem)
 			}
 		}
 
@@ -172,12 +211,14 @@ func parseConfigCerts(t *testing.T, payload *common.Payload) {
 	//}
 }
 
-func parseEndorserCerts(t *testing.T, payload *common.Payload) {
+func parseEndorserCerts(t *testing.T, payload *common.Payload) []byte {
 	// Parse as peer.Transaction
 	transaction := &peer.Transaction{}
 	err := proto.Unmarshal(payload.Data, transaction)
 	require.NoError(t, err)
 	//printJson("envelop.payload.data(transaction)", transaction)
+
+	var evtLogRoot []byte
 
 	// Parse each transaction action
 	// Actions length should be 1 for endorsement transaction
@@ -199,26 +240,29 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 		chaincodeAction, err := protoutil.UnmarshalChaincodeAction(proposalResponsePayload.Extension)
 		require.NoError(t, err)
 
-		var evtRoot []byte
 		if chaincodeAction.Events != nil {
 			ccEvent, err := protoutil.UnmarshalChaincodeEvents(chaincodeAction.Events)
 			require.NoError(t, err)
 
-			evtLog, err := bprnevt.UnmarshalEventLog(ccEvent.Payload)
+			channelHeader := &common.ChannelHeader{}
+			err = proto.Unmarshal(payload.Header.ChannelHeader, channelHeader)
 			require.NoError(t, err)
-			evtRoot = evtLog.Root()
-			fmt.Println("- EventLog elements length", evtLog.LeavesLen())
+
+			evtLog := bprnevt.NewEventLog(channelHeader.ChannelId, ccEvent.ChaincodeId, ccEvent.TxId)
+			err = evtLog.UnmarshalDER(ccEvent.Payload, true)
+			require.NoError(t, err)
+			evtLogRoot = evtLog.Root()
 		}
 
 		// Verify endorsement signatures
-		fmt.Printf("- Endorsements: %d\n", len(actionPayload.Action.Endorsements))
+		fmt.Printf("  Endorsements: %d\n", len(actionPayload.Action.Endorsements))
 		for i, endorsement := range actionPayload.Action.Endorsements {
 			// Parse endorser's identity
 			serializedIdentity := &msp.SerializedIdentity{}
 			err = proto.Unmarshal(endorsement.Endorser, serializedIdentity)
 			require.NoError(t, err)
 
-			cert, pubKey := parseCertWithLabel(fmt.Sprintf("Endorser[%d] certificate", i), serializedIdentity.IdBytes)
+			cert, pubKey := parseCertWithLabel(fmt.Sprintf("Endorser[%d] of %v certificate", i, serializedIdentity.Mspid), serializedIdentity.IdBytes)
 			require.NotNil(t, cert)
 			require.NotNil(t, pubKey)
 
@@ -228,12 +272,6 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 			require.NoError(t, cert.CheckSignatureFrom(issuer))
 
 			msg := append(actionPayload.Action.ProposalResponsePayload, endorsement.Endorser...)
-			if evtRoot != nil {
-				// btip-17 signature message = evtRoot + sha256(ProposalResponsePayload bytes) + Endorser bytes
-				prpDigest := sha256.Sum256(actionPayload.Action.ProposalResponsePayload)
-				msg = append(evtRoot, prpDigest[:]...)
-				msg = append(msg, endorsement.Endorser...)
-			}
 			msgHash := sha256.Sum256(msg)
 
 			// Decode and verify ECDSA signature
@@ -244,4 +282,5 @@ func parseEndorserCerts(t *testing.T, payload *common.Payload) {
 			require.True(t, valid)
 		}
 	}
+	return evtLogRoot
 }
